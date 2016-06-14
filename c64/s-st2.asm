@@ -45,8 +45,7 @@ POENH    ... RMB(1)
 ;
          .BA $93           ;TEMPORAERER AKKU
 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
-PKTFL    ... RMB(1)        
-TEMPY    ... RMB(1)        ;Y TEMPORAER
+TEMPY    ... RMB(1)        ;Y-REG. VORUEBERGEHEND
 ;
 .EQ STATUS  = $90
 .EQ DN      = $BA ;DEV.NUM.
@@ -88,7 +87,7 @@ TEMPY    ... RMB(1)        ;Y TEMPORAER
 .EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-.BA $C945
+.BA $CA15
 NMIT     .WO 0             
 IRQT     .WO 0             
 STKT     .BY 0             
@@ -447,9 +446,9 @@ LO4      PHA               ;FEHLERCODE
          JSR BSMSG         
          JSR OUTNAM        ;FILENAME
          LDA #4            
-         STA TEMPY         
+         STA BUFF          
 LO5      JSR DELAY         
-         DEC TEMPY         ;2 SEK
+         DEC BUFF          ;2 SEK
          BNE LO5           
          PLA               
          TAX               
@@ -683,37 +682,35 @@ WBL3     JSR WRTB
 ;* NAMENSPRUEFUNG SAVE
 ;*****************************
 ;
-SNAME    LDY #0            
+SNAME    LDY #16           
          LDA #" "          
-SN1      STA (CBUF),Y      ;PUFFER
-         INY               ;LOESCHEN
-         CPY #16           
-         BCC SN1           
-         LDY #0            
-         STY PKTFL         
-         STY TEMPY         
-SN2      LDY TEMPY         
-         CPY NLEN          ;FERTIG?
-         BEQ SN4           ;OK
-         LDA (INBUF),Y     ;FILENAME
+SNCLEAR  STA PUFFER-1,Y    ;PUFFER
+         DEY               ;LOESCHEN
+         BNE SNCLEAR       
+         LDX #0            ;VORHER Y=0
+         BEQ SNCHECK       ;IMMER
+SNLOOP   LDA (INBUF),Y     ;FILENAME
+         CMP #"*"          ;PLATZHALTER
+         BEQ SNERROR       ;ILLEGAL
+         CMP #"?"          ;PLATZHALTER
+         BEQ SNERROR       ;ILLEGAL
          CMP #"."          
-         BNE SN3           
+         BNE SNSTORE       
          CPY #13           ;PUNKTPOS.
-         BCS SN6           ;FEHLER
-         LDY PKTFL         
-         CPY #13           ;PUNKT DOPPELT
-         BCS SN6           
-         LDY #12           ;PUNKTPOS.
-         STY PKTFL         
-SN3      LDY PKTFL         ;IN KASSETTEN-
-         STA (CBUF),Y      ;PUFFER
-         INY               ;UEBERTRAGEN
-         STY PKTFL         
-         INC TEMPY         ;NAECHSTES
-         BNE SN2           ;ZEICHEN
-SN4      CLC               ;OK
+         BCS SNERROR       ;NAME ZU LANG - FEHLER!
+         CPX #13           ;PUNKT DOPPELT - FEHLER!
+         BCS SNERROR       
+         LDX #12           ;PUNKTPOS.
+SNSTORE  STA PUFFER,X      ;PUFFER
+         INX               ;UEBERTRAGEN
+         CPX #16           ;PUFFERENDE?
+         BEQ SNOK          ;VOLL!
+         INY               ;NAECHSTES
+SNCHECK  CPY NLEN          ;EINGABE ENDE?
+         BCC SNLOOP        ;WEITER
+SNOK     CLC               ;C-FLAG
          RTS               
-SN6      SEC               ;ERROR
+SNERROR  SEC               ;ERROR
          RTS               
 ;*****************************
 ;* SUPERTAPE BETRIEBSSYS.SAVE

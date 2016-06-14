@@ -1,4 +1,4 @@
-;<s-st2-20> ==1FD8==
+;<s-st2-21> ==1FD8==
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -46,8 +46,7 @@
   168 ;
   170          .BA $93           ;TEMPORAERER AKKU
   172 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
-  174 PKTFL    ... RMB(1)        
-  176 TEMPY    ... RMB(1)        ;Y TEMPORAER
+  173 TEMPY    ... RMB(1)        ;Y-REG. VORUEBERGEHEND
   178 ;
   180 .EQ STATUS  = $90
   182 .EQ DN      = $BA ;DEV.NUM.
@@ -89,7 +88,7 @@
   264 .EQ STROUT  = $AB1E ;STR.OUT
   266 ;
   268 ;
-  270 .BA $C945
+  270 .BA $CA15
   500 NMIT     .WO 0             
   502 IRQT     .WO 0             
   504 STKT     .BY 0             
@@ -448,9 +447,9 @@
  6152          JSR BSMSG         
  6153          JSR OUTNAM        ;FILENAME
  6154          LDA #4            
- 6155          STA TEMPY         
+ 6155          STA BUFF          
  6156 LO5      JSR DELAY         
- 6157          DEC TEMPY         ;2 SEK
+ 6157          DEC BUFF          ;2 SEK
  6158          BNE LO5           
  6159          PLA               
  6160          TAX               
@@ -684,38 +683,36 @@
  9101 ;* NAMENSPRUEFUNG SAVE
  9102 ;*****************************
  9103 ;
- 9104 SNAME    LDY #0            
+ 9104 SNAME    LDY #16           
  9105          LDA #" "          
- 9106 SN1      STA (CBUF),Y      ;PUFFER
- 9107          INY               ;LOESCHEN
- 9108          CPY #16           
- 9109          BCC SN1           
- 9110          LDY #0            
- 9111          STY PKTFL         
- 9112          STY TEMPY         
- 9113 SN2      LDY TEMPY         
- 9114          CPY NLEN          ;FERTIG?
- 9115          BEQ SN4           ;OK
- 9117          LDA (INBUF),Y     ;FILENAME
- 9118          CMP #"."          
- 9119          BNE SN3           
- 9120          CPY #13           ;PUNKTPOS.
- 9121          BCS SN6           ;FEHLER
- 9122          LDY PKTFL         
- 9123          CPY #13           ;PUNKT DOPPELT
- 9124          BCS SN6           
- 9125          LDY #12           ;PUNKTPOS.
- 9126          STY PKTFL         
- 9131 SN3      LDY PKTFL         ;IN KASSETTEN-
- 9132          STA (CBUF),Y      ;PUFFER
- 9133          INY               ;UEBERTRAGEN
- 9134          STY PKTFL         
- 9135          INC TEMPY         ;NAECHSTES
- 9136          BNE SN2           ;ZEICHEN
- 9137 SN4      CLC               ;OK
- 9138          RTS               
- 9139 SN6      SEC               ;ERROR
- 9140          RTS               
+ 9106 SNCLEAR  STA PUFFER-1,Y    ;PUFFER
+ 9107          DEY               ;LOESCHEN
+ 9108          BNE SNCLEAR       
+ 9111          LDX #0            ;VORHER Y=0
+ 9112          BEQ SNCHECK       ;IMMER
+ 9117 SNLOOP   LDA (INBUF),Y     ;FILENAME
+ 9118          CMP #"*"          ;PLATZHALTER
+ 9119          BEQ SNERROR       ;ILLEGAL
+ 9120          CMP #"?"          ;PLATZHALTER
+ 9121          BEQ SNERROR       ;ILLEGAL
+ 9124          CMP #"."          
+ 9125          BNE SNSTORE       
+ 9126          CPY #13           ;PUNKTPOS.
+ 9127          BCS SNERROR       ;NAME ZU LANG - FEHLER!
+ 9128          CPX #13           ;PUNKT DOPPELT - FEHLER!
+ 9129          BCS SNERROR       
+ 9130          LDX #12           ;PUNKTPOS.
+ 9132 SNSTORE  STA PUFFER,X      ;PUFFER
+ 9133          INX               ;UEBERTRAGEN
+ 9134          CPX #16           ;PUFFERENDE?
+ 9135          BEQ SNOK          ;VOLL!
+ 9137          INY               ;NAECHSTES
+ 9138 SNCHECK  CPY NLEN          ;EINGABE ENDE?
+ 9139          BCC SNLOOP        ;WEITER
+ 9147 SNOK     CLC               ;C-FLAG
+ 9148          RTS               
+ 9149 SNERROR  SEC               ;ERROR
+ 9150          RTS               
 10100 ;*****************************
 10101 ;* SUPERTAPE BETRIEBSSYS.SAVE
 10102 ;*****************************
