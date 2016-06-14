@@ -16,6 +16,7 @@
 HERE     .BA HERE+N        
          .RT               
 ;
+.OB "C-ST2-22,P,W"
 .EQ CPORT   = $01    ; MP-PORT
 .EQ LOSPDL  = $46    ; TIMER
 .EQ LOSPDH  = $81    ;  3600 BD
@@ -45,7 +46,6 @@ POENH    ... RMB(1)
 ;
          .BA $93           ;TEMPORAERER AKKU
 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
-TEMPY    ... RMB(1)        ;Y-REG. VORUEBERGEHEND
 ;
 .EQ STATUS  = $90
 .EQ DN      = $BA ;DEV.NUM.
@@ -87,7 +87,7 @@ TEMPY    ... RMB(1)        ;Y-REG. VORUEBERGEHEND
 .EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-.BA $CA15
+.BA $CA25
 NMIT     .WO 0             
 IRQT     .WO 0             
 STKT     .BY 0             
@@ -307,27 +307,27 @@ STL      SEI
          TSX               ;STACKPOINTER
          STX STKT          ;ABSPEICHERN
          JSR SETUP         ;LESEROUTINE AUFSETZEN
-         LDY #17           
-         LDA (CBUF),Y      
+         LDY #17           ;STARTADR.
+         LDA (CBUF),Y      ;VON BAND:
          INY               
          STA POINTL        ;ABSOLUT
          LDA (CBUF),Y      ;LOAD
          INY               
          STA POINTH        
-         LDA SECA          
+         LDA SECA          ;SEK.ADR.?
          BNE STL1          
          LDA LANF          
          STA POINTL        ;AN GEGEBENE
          LDA LANF+1        ;ADR.
          STA POINTH        
 STL1     CLC               
-         LDA POINTL        
-         ADC (CBUF),Y      
+         LDA POINTL        ;LAENGE
+         ADC (CBUF),Y      ;+START
          STA ENDL          
          INY               
          LDA POINTH        
          ADC (CBUF),Y      
-         STA ENDH          ;ENDADR
+         STA ENDH          ;=ENDADR
          LDY #16           
          LDA (CBUF),Y      ;BAUDRATE
          JSR SETTIMER      ;TIMERINTERRUPT
@@ -337,14 +337,16 @@ STL1     CLC
          BNE STLERR3       
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
-STL2     JSR RDBYTE        
+;
+STLREAD  JSR RDBYTE        
          BIT TEMPA         ;VERIFY?
-         BPL STL3          
+         BPL STLNOVER      
          CMP (POINTL),Y    
          BNE STLERR4       ;ERROR
          .BY $2C           
-STL3     STA (POINTL),Y    
+STLNOVER STA (POINTL),Y    
          LDX CHKSML        ;CHECKSUM
+;
 STLPLOOP LSR               ;BERECHNEN
          BCC STLPNULL      ;1EN ZAEHLEN
          INX               
@@ -357,12 +359,14 @@ STLPNULL BNE STLPLOOP
          INC POINTL        ;POINTER
          BNE STL6          ;ERHOEHEN
          INC POINTH        
+;
 STL6     LDA POINTL        
          CMP ENDL          ;ENDE?
-         BNE STL2          ;WEITER LESEN
+         BNE STLREAD       ;WEITER LESEN
          LDA POINTH        
          CMP ENDH          
-         BNE STL2          
+         BNE STLREAD       
+;
          JSR RDBYTE        ;PRUEFSUMME
          CMP CHKSML        ;LESEN
          BNE STLERR2       
@@ -376,9 +380,9 @@ STLERR3  LDA #3            ;SYNC ERROR
 STLERR4  LDA #4            ;VERIFY ERROR
          SEC               
          .BY $24           
-STLEXIT  CLC               
-         LDX POINTL        
-         STX ENDL          
+STLEXIT  CLC               ;BASIC
+         LDX POINTL        ;ENDE
+         STX ENDL          ;SETZEN!
          LDX POINTH        
          STX ENDH          
          CLI               
@@ -523,10 +527,10 @@ LOCOM    .TX "COM"
 ;*****************************
 ;
 STP      JSR LNAME         
-         BCC STP0          
+         BCC STPNOK        
          LDA #01           ;SYNTAXFEHLER
          RTS               
-STP0     TSX               ;STACKPOS.
+STPNOK   TSX               ;STACKPOS.
          STX STKT          ;MERKEN
          JSR SETUP         
          JSR DELAY         
@@ -538,8 +542,9 @@ LOSYNC   JSR INSYN         ;SYNCHRONISIEREN
          BNE LOSYNC        
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
-STP1     JSR RDBYTE        ;BYTE VOM BAND
+STPREAD  JSR RDBYTE        ;BYTE VOM BAND
          STA (CBUF),Y      ;ABLEGEN
+;
          LDX CHKSML        
 STPPLOOP LSR               ;PRUEFSUM
          BCC STPPNULL      ;BERECHNEN
@@ -551,50 +556,43 @@ STPPNULL BNE STPPLOOP      ;ALLE 1EN GEZAEHLT?
          STX CHKSML        
          INY               
          CPY #$19          ;BLOCK ENDE
-         BCC STP1          
+         BCC STPREAD       
          JSR RDBYTE        
          CMP CHKSML        
-         BNE STPERR1       
+         BNE STPCSERR      
          JSR RDBYTE        
          CMP CHKSMH        ;PRUEFSUMME
-         BNE STPERR1       ;TESTEN
+         BNE STPCSERR      ;TESTEN
          LDY #0            
-         STY TEMPY         
          LDX #0            
-STP5     CPX NLEN          
-         BCS STPFND        ;FERTIG?
-         TXA               
-         TAY               
-         LDA (INBUF),Y     
-         CMP #"."          ;EXTENSION?
-         BEQ STP8          
+STPLOOP  LDA (INBUF),Y     
+         CMP #"."          
+         BEQ STPDOT        
          CMP #"*"          
-         BEQ STP9          
+         BEQ STPEXT        ;2. STERN?
          CMP #"?"          
-         BEQ STP6          ;NAECHSTES ZEICHEN
-         LDY TEMPY         
-         CMP (CBUF),Y      
-         BNE STPERR2       ;NAECHSTES FILE
-STP6     INC TEMPY         
-STP7     INX               
-         BNE STP5          ;NAECHSTES ZEICHEN
-STP8     LDY #12           ;EXTENSION
-         STY TEMPY         ;FELD
-         BNE STP6          ;PUNKT UEBERLESEN
-STP9     LDY #12           
-         CPY TEMPY         ;EXTENSION?
-         BCC STPFND        ;OK
-         STY TEMPY         
-         BCS STP7          ;WEITER
-STPERR1  LDA #02           ;BAD CHECKSUM
-         SEC               
-STP10    CLI               
-         JMP ENDSR         
-STPERR2  LDA #0            ;NICHT RICHTIGES FILE
-STP11    CLC               ;GEFUNDEN
-         BCC STP10         
-STPFND   LDA #1            ;RICHTIGES FILE
-         BNE STP11         ;GEFUNDEN
+         BEQ STPNEXT       
+STPCMP   CMP PUFFER,X      
+         BNE STPCONT       ;VERSCHIEDEN!
+STPNEXT  INX               
+STPNXTIN INY               
+         CPY NLEN          ;INPUTENDE?
+         BCC STPLOOP       ;WEITER
+STPFND   LDA #1            ;GEFUNDEN!
+         .BY $2C           ;SKIP NAECHTEN BEFEHL
+STPCONT  LDA #0            
+         CLC               
+         BCC STPEXIT       ;EXIT
+STPCSERR LDA #2            ;CHECKSUM
+         SEC               ;ERROR
+STPEXIT  CLI               ;INTERRUPTS ERLAUBEN
+         JMP ENDSR         ;ENDE!
+STPEXT   CPX #13           ;IN TYP FELD (NACH PUNKT)
+         BCS STPFND        ;JA, GEFUNDEN!
+         LDX #12           ;PUNKTPOS.
+         BNE STPNXTIN      ;WEITER
+STPDOT   LDX #12           ;PUNKTPOS.
+         BNE STPCMP        ;IMMER VERGLEICHEN!
 ;
 OUTNAM   LDA #" "          
          JSR BSOUT         
@@ -874,3 +872,4 @@ BEGIN    LDA $330
          STA $333          
          LDY #0            
          JMP MSG           
+.EN

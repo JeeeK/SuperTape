@@ -1,4 +1,4 @@
-;<s-st2-21> ==1FD8==
+;<s-st2-22> ==1FD8==
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -17,6 +17,7 @@
   102 HERE     .BA HERE+N        
   103          .RT               
   104 ;
+  105 .OB "C-ST2-22,P,W"
   114 .EQ CPORT   = $01    ; MP-PORT
   118 .EQ LOSPDL  = $46    ; TIMER
   120 .EQ LOSPDH  = $81    ;  3600 BD
@@ -46,7 +47,6 @@
   168 ;
   170          .BA $93           ;TEMPORAERER AKKU
   172 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
-  173 TEMPY    ... RMB(1)        ;Y-REG. VORUEBERGEHEND
   178 ;
   180 .EQ STATUS  = $90
   182 .EQ DN      = $BA ;DEV.NUM.
@@ -88,7 +88,7 @@
   264 .EQ STROUT  = $AB1E ;STR.OUT
   266 ;
   268 ;
-  270 .BA $CA15
+  270 .BA $CA25
   500 NMIT     .WO 0             
   502 IRQT     .WO 0             
   504 STKT     .BY 0             
@@ -308,27 +308,27 @@
  5115          TSX               ;STACKPOINTER
  5120          STX STKT          ;ABSPEICHERN
  5125          JSR SETUP         ;LESEROUTINE AUFSETZEN
- 5202          LDY #17           
- 5204          LDA (CBUF),Y      
+ 5202          LDY #17           ;STARTADR.
+ 5204          LDA (CBUF),Y      ;VON BAND:
  5205          INY               
  5206          STA POINTL        ;ABSOLUT
  5208          LDA (CBUF),Y      ;LOAD
  5209          INY               
  5210          STA POINTH        
- 5212          LDA SECA          
+ 5212          LDA SECA          ;SEK.ADR.?
  5214          BNE STL1          
  5215          LDA LANF          
  5216          STA POINTL        ;AN GEGEBENE
  5218          LDA LANF+1        ;ADR.
  5220          STA POINTH        
  5222 STL1     CLC               
- 5224          LDA POINTL        
- 5226          ADC (CBUF),Y      
+ 5224          LDA POINTL        ;LAENGE
+ 5226          ADC (CBUF),Y      ;+START
  5228          STA ENDL          
  5229          INY               
  5230          LDA POINTH        
  5232          ADC (CBUF),Y      
- 5234          STA ENDH          ;ENDADR
+ 5234          STA ENDH          ;=ENDADR
  5235          LDY #16           
  5236          LDA (CBUF),Y      ;BAUDRATE
  5238          JSR SETTIMER      ;TIMERINTERRUPT
@@ -338,14 +338,16 @@
  5256          BNE STLERR3       
  5258          STY CHKSML        ;PRUEFSUMME
  5260          STY CHKSMH        ;LOESCHEN
- 5262 STL2     JSR RDBYTE        
+ 5261 ;
+ 5262 STLREAD  JSR RDBYTE        
  5270          BIT TEMPA         ;VERIFY?
- 5272          BPL STL3          
+ 5272          BPL STLNOVER      
  5274          CMP (POINTL),Y    
  5275          BNE STLERR4       ;ERROR
  5276          .BY $2C           
- 5277 STL3     STA (POINTL),Y    
+ 5277 STLNOVER STA (POINTL),Y    
  5278          LDX CHKSML        ;CHECKSUM
+ 5279 ;
  5280 STLPLOOP LSR               ;BERECHNEN
  5281          BCC STLPNULL      ;1EN ZAEHLEN
  5282          INX               
@@ -358,12 +360,14 @@
  5292          INC POINTL        ;POINTER
  5294          BNE STL6          ;ERHOEHEN
  5296          INC POINTH        
+ 5297 ;
  5298 STL6     LDA POINTL        
  5300          CMP ENDL          ;ENDE?
- 5302          BNE STL2          ;WEITER LESEN
+ 5302          BNE STLREAD       ;WEITER LESEN
  5304          LDA POINTH        
  5306          CMP ENDH          
- 5308          BNE STL2          
+ 5308          BNE STLREAD       
+ 5309 ;
  5310          JSR RDBYTE        ;PRUEFSUMME
  5318          CMP CHKSML        ;LESEN
  5320          BNE STLERR2       
@@ -377,9 +381,9 @@
  5346 STLERR4  LDA #4            ;VERIFY ERROR
  5348          SEC               
  5349          .BY $24           
- 5350 STLEXIT  CLC               
- 5351          LDX POINTL        
- 5352          STX ENDL          
+ 5350 STLEXIT  CLC               ;BASIC
+ 5351          LDX POINTL        ;ENDE
+ 5352          STX ENDL          ;SETZEN!
  5353          LDX POINTH        
  5354          STX ENDH          
  5355          CLI               
@@ -524,10 +528,10 @@
  6502 ;*****************************
  6503 ;
  6510 STP      JSR LNAME         
- 6512          BCC STP0          
+ 6512          BCC STPNOK        
  6514          LDA #01           ;SYNTAXFEHLER
  6516          RTS               
- 6518 STP0     TSX               ;STACKPOS.
+ 6518 STPNOK   TSX               ;STACKPOS.
  6520          STX STKT          ;MERKEN
  6522          JSR SETUP         
  6523          JSR DELAY         
@@ -539,8 +543,9 @@
  6610          BNE LOSYNC        
  6612          STY CHKSML        ;PRUEFSUMME
  6614          STY CHKSMH        ;LOESCHEN
- 6616 STP1     JSR RDBYTE        ;BYTE VOM BAND
+ 6616 STPREAD  JSR RDBYTE        ;BYTE VOM BAND
  6618          STA (CBUF),Y      ;ABLEGEN
+ 6620 ;
  6626          LDX CHKSML        
  6628 STPPLOOP LSR               ;PRUEFSUM
  6630          BCC STPPNULL      ;BERECHNEN
@@ -552,50 +557,43 @@
  6639          STX CHKSML        
  6642          INY               
  6644          CPY #$19          ;BLOCK ENDE
- 6646          BCC STP1          
+ 6646          BCC STPREAD       
  6648          JSR RDBYTE        
  6650          CMP CHKSML        
- 6652          BNE STPERR1       
+ 6652          BNE STPCSERR      
  6654          JSR RDBYTE        
  6656          CMP CHKSMH        ;PRUEFSUMME
- 6658          BNE STPERR1       ;TESTEN
+ 6658          BNE STPCSERR      ;TESTEN
  6660          LDY #0            
- 6672          STY TEMPY         
- 6674          LDX #0            
- 6675 STP5     CPX NLEN          
- 6676          BCS STPFND        ;FERTIG?
- 6677          TXA               
- 6678          TAY               
- 6679          LDA (INBUF),Y     
- 6680          CMP #"."          ;EXTENSION?
- 6682          BEQ STP8          
- 6684          CMP #"*"          
- 6686          BEQ STP9          
- 6690          CMP #"?"          
- 6692          BEQ STP6          ;NAECHSTES ZEICHEN
- 6694          LDY TEMPY         
- 6695          CMP (CBUF),Y      
- 6696          BNE STPERR2       ;NAECHSTES FILE
- 6698 STP6     INC TEMPY         
- 6700 STP7     INX               
- 6702          BNE STP5          ;NAECHSTES ZEICHEN
- 6704 STP8     LDY #12           ;EXTENSION
- 6706          STY TEMPY         ;FELD
- 6708          BNE STP6          ;PUNKT UEBERLESEN
- 6718 STP9     LDY #12           
- 6720          CPY TEMPY         ;EXTENSION?
- 6722          BCC STPFND        ;OK
- 6724          STY TEMPY         
- 6726          BCS STP7          ;WEITER
- 6728 STPERR1  LDA #02           ;BAD CHECKSUM
- 6730          SEC               
- 6731 STP10    CLI               
- 6732          JMP ENDSR         
- 6734 STPERR2  LDA #0            ;NICHT RICHTIGES FILE
- 6736 STP11    CLC               ;GEFUNDEN
- 6738          BCC STP10         
- 6740 STPFND   LDA #1            ;RICHTIGES FILE
- 6742          BNE STP11         ;GEFUNDEN
+ 6662          LDX #0            
+ 6670 STPLOOP  LDA (INBUF),Y     
+ 6672          CMP #"."          
+ 6674          BEQ STPDOT        
+ 6675          CMP #"*"          
+ 6676          BEQ STPEXT        ;2. STERN?
+ 6677          CMP #"?"          
+ 6678          BEQ STPNEXT       
+ 6679 STPCMP   CMP PUFFER,X      
+ 6680          BNE STPCONT       ;VERSCHIEDEN!
+ 6682 STPNEXT  INX               
+ 6684 STPNXTIN INY               
+ 6686          CPY NLEN          ;INPUTENDE?
+ 6688          BCC STPLOOP       ;WEITER
+ 6690 STPFND   LDA #1            ;GEFUNDEN!
+ 6692          .BY $2C           ;SKIP NAECHTEN BEFEHL
+ 6694 STPCONT  LDA #0            
+ 6695          CLC               
+ 6696          BCC STPEXIT       ;EXIT
+ 6698 STPCSERR LDA #2            ;CHECKSUM
+ 6700          SEC               ;ERROR
+ 6702 STPEXIT  CLI               ;INTERRUPTS ERLAUBEN
+ 6704          JMP ENDSR         ;ENDE!
+ 6706 STPEXT   CPX #13           ;IN TYP FELD (NACH PUNKT)
+ 6708          BCS STPFND        ;JA, GEFUNDEN!
+ 6718          LDX #12           ;PUNKTPOS.
+ 6720          BNE STPNXTIN      ;WEITER
+ 6722 STPDOT   LDX #12           ;PUNKTPOS.
+ 6724          BNE STPCMP        ;IMMER VERGLEICHEN!
  6752 ;
  6754 OUTNAM   LDA #" "          
  6755          JSR BSOUT         
@@ -875,3 +873,4 @@
 11180          STA $333          
 11190          LDY #0            
 11200          JMP MSG           
+19999 .EN
