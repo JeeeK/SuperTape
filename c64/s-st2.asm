@@ -1,6 +1,6 @@
-;.OB "C-ST2-24,P,W"
-;.SY 2,8,2,"Y-ST2-24,P,W"
-;.LI 3,8,3,"L-ST2-24,P,W"
+;.OB "C-ST2-25,P,W"
+;.SY 2,8,2,"Y-ST2-25,P,W"
+;.LI 3,8,3,"L-ST2-25,P,W"
 ;********************************
 ;*                              *
 ;*   S U P E R T A P E   C 6 4  *
@@ -18,6 +18,7 @@
 ;*                              *
 ;********************************
 ;
+;MAKRO: RESERVE MEMORY BYTES
          .MA RMB(N)        
 HERE     .BA HERE+N        
          .RT               
@@ -249,12 +250,12 @@ ENDSR    PHA
          ORA #$20          ;MOTOR AUS
          STA CPORT         
          LDA #$7F          ;INT.CONTR.
-         STA ICR           ;REG.
-         STA ICRB          ;LOESCHEN
+         STA ICR           ;REG.: ALLE INTERR.
+         STA ICRB          ;QUELLEN LOESCHEN
          LDA #$08          ;ONE SHOT
          STA CRA           
          STA TST           
-         LDA IRQT          
+         LDA IRQT          ;INTERR.
          STA IRQV          
          LDA IRQT+1        ;VEKTOREN
          STA IRQV+1        ;WIEDER
@@ -270,6 +271,7 @@ ENDSR    PHA
 ;*****************************
 ;
 ; Y-REG BIT7 MUSS IMMER 0 SEIN!
+;
 RDBYTECS BIT WTFLAG        
          BPL RDBYTECS      ;WARTEN
          STY WTFLAG        ;FLAG LOESCHEN
@@ -291,6 +293,7 @@ CALCCS   LSR               ;PRUEFSUMME
          INC CHKSMH        
 CCSEXIT  LDA BUFF          
          RTS               
+; TABELLE WERT->BITANZAHL
 BCTAB    .BY 0,1,1,2,1,2,2,3; NIBBLEWERTE 0-7
          .BY 1,2,2,3,2,3,3,4; NIBBLEWERTE 8-15
 ;
@@ -316,11 +319,11 @@ LNAME    LDA NLEN
          LDY #0            
          LDX #0            ;FIKT. ZIELPUFFER
          BEQ LNCHK         ;IMMER..
-LN1      LDA (INBUF),Y     
+LN1      LDA (INBUF),Y     ;ZEICHEN FUER ZEICHEN ...
          CMP #"."          
          BNE LN5           
-         CPY #13           
-         BCS LN7           ;NAMESTEIL ZU LANG - FEHLER!
+         CPY #13           ;IM EXT-BEREICH?
+         BCS LN7           ;NAMENSTEIL ZU LANG - FEHLER!
          CPX #13           
          BCS LN7           ;2. PUNKT - FEHLER!
          LDX #12           ;PUNKTPOS., ZUM TYP
@@ -427,11 +430,11 @@ SET1     LDX #LOSPDL       ;3600
 SET2     STX CNTAL         ;TIMER
          STY CNTAH         ;WERT
          STA TLIM          ;ZEITLIMIT F.T3
-         LDA #$7F          
-         STA ICR           
-         LDA #$90          
-         STA ICR           ;TIMER INTERRUPT
-         RTS               
+         LDA #$7F          ;ALLE INTERR.QUELLEN
+         STA ICR           ;LOESCHEN
+         LDA #$90          ;INTERR. BEI
+         STA ICR           ;FALLENDE FLANKE VON
+         RTS               ;FLAG (CASS. IN)
 ;*****************************
 ;* LOAD ROUTINE
 ;*****************************
@@ -582,6 +585,7 @@ STPREAD  JSR RDBYTECS      ;BYTE VOM BAND
          BNE STPCSERR      ;TESTEN
          LDY #0            
          LDX #0            
+         BEQ STPCHECK      
 STPLOOP  LDA (INBUF),Y     
          CMP #"."          
          BEQ STPDOT        
@@ -593,12 +597,12 @@ STPCMP   CMP PUFFER,X
          BNE STPCONT       ;VERSCHIEDEN!
 STPNEXT  INX               
 STPNXTIN INY               
-         CPY NLEN          ;INPUTENDE?
-         BCC STPLOOP       ;WEITER
+STPCHECK CPY NLEN          ;INPUTENDE?
+         BNE STPLOOP       ;WEITER
 STPFND   LDA #1            ;GEFUNDEN!
-         .BY $2C           ;SKIP NAECHTEN BEFEHL
-STPCONT  LDA #0            
-         CLC               
+         .BY $2C           ;SKIP NAECHSTEN BEFEHL
+STPCONT  LDA #0            ;NICHT GEFUNDEN,
+         CLC               ;NAECHSTE DATEI!
          BCC STPEXIT       ;EXIT
 STPCSERR LDA #2            ;CHECKSUM
          SEC               ;ERROR
@@ -611,11 +615,11 @@ STPEXT   CPX #13           ;IN TYP FELD (NACH PUNKT)
 STPDOT   LDX #12           ;PUNKTPOS.
          BNE STPCMP        ;IMMER VERGLEICHEN!
 ;
-OUTNAM   LDA #" "          
-         JSR BSOUT         
-         LDY #0            
+OUTNAM   LDA #" "          ;TRENNZEICHEN
+         LDY #$FF          ; -1
+         BMI OUT2          
 OUT1     LDA (CBUF),Y      
-         JSR BSOUT         
+OUT2     JSR BSOUT         
          INY               
          CPY #16           
          BCC OUT1          

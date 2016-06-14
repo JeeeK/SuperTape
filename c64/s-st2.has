@@ -1,7 +1,7 @@
-;<s-st2-24> ==1FD8==
-    1 ;.OB "C-ST2-24,P,W"
-    2 ;.SY 2,8,2,"Y-ST2-24,P,W"
-    3 ;.LI 3,8,3,"L-ST2-24,P,W"
+;<s-st2-25> ==1FD8==
+    1 ;.OB "C-ST2-25,P,W"
+    2 ;.SY 2,8,2,"Y-ST2-25,P,W"
+    3 ;.LI 3,8,3,"L-ST2-25,P,W"
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -19,10 +19,11 @@
    24 ;*                              *
    99 ;********************************
   100 ;
-  101          .MA RMB(N)        
-  102 HERE     .BA HERE+N        
-  103          .RT               
-  104 ;
+  101 ;MAKRO: RESERVE MEMORY BYTES
+  102          .MA RMB(N)        
+  103 HERE     .BA HERE+N        
+  104          .RT               
+  105 ;
   114 .EQ CPORT   = $01    ; MP-PORT
   118 .EQ LOSPDL  = $46    ; TIMER
   120 .EQ LOSPDH  = $81    ;  3600 BD
@@ -250,12 +251,12 @@
  3390          ORA #$20          ;MOTOR AUS
  3393          STA CPORT         
  3396          LDA #$7F          ;INT.CONTR.
- 3399          STA ICR           ;REG.
- 3402          STA ICRB          ;LOESCHEN
+ 3399          STA ICR           ;REG.: ALLE INTERR.
+ 3402          STA ICRB          ;QUELLEN LOESCHEN
  3405          LDA #$08          ;ONE SHOT
  3408          STA CRA           
  3411          STA TST           
- 3414          LDA IRQT          
+ 3414          LDA IRQT          ;INTERR.
  3417          STA IRQV          
  3420          LDA IRQT+1        ;VEKTOREN
  3423          STA IRQV+1        ;WIEDER
@@ -271,6 +272,7 @@
  3502 ;*****************************
  3503 ;
  3504 ; Y-REG BIT7 MUSS IMMER 0 SEIN!
+ 3505 ;
  3510 RDBYTECS BIT WTFLAG        
  3512          BPL RDBYTECS      ;WARTEN
  3514          STY WTFLAG        ;FLAG LOESCHEN
@@ -292,6 +294,7 @@
  3565          INC CHKSMH        
  3570 CCSEXIT  LDA BUFF          
  3575          RTS               
+ 3577 ; TABELLE WERT->BITANZAHL
  3580 BCTAB    .BY 0,1,1,2,1,2,2,3; NIBBLEWERTE 0-7
  3585          .BY 1,2,2,3,2,3,3,4; NIBBLEWERTE 8-15
  3600 ;
@@ -317,11 +320,11 @@
  4107          LDY #0            
  4109          LDX #0            ;FIKT. ZIELPUFFER
  4110          BEQ LNCHK         ;IMMER..
- 4113 LN1      LDA (INBUF),Y     
+ 4113 LN1      LDA (INBUF),Y     ;ZEICHEN FUER ZEICHEN ...
  4114          CMP #"."          
  4115          BNE LN5           
- 4116          CPY #13           
- 4117          BCS LN7           ;NAMESTEIL ZU LANG - FEHLER!
+ 4116          CPY #13           ;IM EXT-BEREICH?
+ 4117          BCS LN7           ;NAMENSTEIL ZU LANG - FEHLER!
  4118          CPX #13           
  4119          BCS LN7           ;2. PUNKT - FEHLER!
  4120          LDX #12           ;PUNKTPOS., ZUM TYP
@@ -428,11 +431,11 @@
  5540 SET2     STX CNTAL         ;TIMER
  5542          STY CNTAH         ;WERT
  5544          STA TLIM          ;ZEITLIMIT F.T3
- 5546          LDA #$7F          
- 5548          STA ICR           
- 5550          LDA #$90          
- 5552          STA ICR           ;TIMER INTERRUPT
- 5554          RTS               
+ 5546          LDA #$7F          ;ALLE INTERR.QUELLEN
+ 5548          STA ICR           ;LOESCHEN
+ 5550          LDA #$90          ;INTERR. BEI
+ 5552          STA ICR           ;FALLENDE FLANKE VON
+ 5554          RTS               ;FLAG (CASS. IN)
  6100 ;*****************************
  6101 ;* LOAD ROUTINE
  6102 ;*****************************
@@ -583,6 +586,7 @@
  6660          BNE STPCSERR      ;TESTEN
  6661          LDY #0            
  6662          LDX #0            
+ 6663          BEQ STPCHECK      
  6670 STPLOOP  LDA (INBUF),Y     
  6672          CMP #"."          
  6674          BEQ STPDOT        
@@ -594,12 +598,12 @@
  6680          BNE STPCONT       ;VERSCHIEDEN!
  6682 STPNEXT  INX               
  6684 STPNXTIN INY               
- 6686          CPY NLEN          ;INPUTENDE?
- 6688          BCC STPLOOP       ;WEITER
+ 6686 STPCHECK CPY NLEN          ;INPUTENDE?
+ 6688          BNE STPLOOP       ;WEITER
  6690 STPFND   LDA #1            ;GEFUNDEN!
- 6692          .BY $2C           ;SKIP NAECHTEN BEFEHL
- 6694 STPCONT  LDA #0            
- 6695          CLC               
+ 6692          .BY $2C           ;SKIP NAECHSTEN BEFEHL
+ 6694 STPCONT  LDA #0            ;NICHT GEFUNDEN,
+ 6695          CLC               ;NAECHSTE DATEI!
  6696          BCC STPEXIT       ;EXIT
  6698 STPCSERR LDA #2            ;CHECKSUM
  6700          SEC               ;ERROR
@@ -612,11 +616,11 @@
  6722 STPDOT   LDX #12           ;PUNKTPOS.
  6724          BNE STPCMP        ;IMMER VERGLEICHEN!
  6752 ;
- 6754 OUTNAM   LDA #" "          
- 6755          JSR BSOUT         
- 6757          LDY #0            
+ 6754 OUTNAM   LDA #" "          ;TRENNZEICHEN
+ 6755          LDY #$FF          ; -1
+ 6757          BMI OUT2          
  6758 OUT1     LDA (CBUF),Y      
- 6759          JSR BSOUT         
+ 6759 OUT2     JSR BSOUT         
  6760          INY               
  6762          CPY #16           
  6764          BCC OUT1          
