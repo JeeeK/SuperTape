@@ -1,4 +1,4 @@
-;<s-st2 19.prg> ==1FD8==
+;<s-st2-20> ==1FD8==
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -9,6 +9,8 @@
    17 ;*                              *
    18 ;*   VERBESSERT 6/6/1990 JK     *
    19 ;*              10/6/90         *
+   20 ;*   UEBERARBEITET 28/3/2012 JK *
+   21 ;*                              *
    99 ;********************************
   100 ;
   101          .MA RMB(N)        
@@ -43,7 +45,7 @@
   166 POENH    ... RMB(1)        
   168 ;
   170          .BA $93           ;TEMPORAERER AKKU
-  172 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG
+  172 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
   174 PKTFL    ... RMB(1)        
   176 TEMPY    ... RMB(1)        ;Y TEMPORAER
   178 ;
@@ -199,6 +201,7 @@
  3255 ;* BYTE LESEN
  3258 ;*****************************
  3261 ;
+ 3262 ; Y-REG BIT7 MUSS IMMER 0 SEIN!
  3264 RDBYTE   BIT WTFLAG        
  3267          BPL RDBYTE        ;WARTEN
  3270          STY WTFLAG        ;FLAG LOESCHEN
@@ -217,7 +220,7 @@
  3309          STY CHAR          
  3312          LDY #10           ;NOCH 10 SYNCS
  3315          STY SFLAG         ;BYTEWEISE
- 3318          STY WTFLAG        ;FLAG LOESCHEN
+ 3318          STY WTFLAG        ;FLAG LOESCHEN, BIT7
  3321 INS2     JSR RDBYTE        ;BYTE EINLESEN
  3333          CMP #$16          ;NOCH IMMER SYNC
  3336          BNE INSYN         ;VON VORN
@@ -279,27 +282,22 @@
  4105          CMP #17           
  4106          BCS LN7           ;ZU LANG
  4107          LDY #0            
- 4108          STY PKTFL         ;PUNKTFLAG
- 4109          LDX #0            ;MISST FELDGROESSE
- 4110 LN1      CPY NLEN          
- 4111          BCS LN6           ;FERTIG
- 4113          LDA (INBUF),Y     
+ 4109          LDX #0            ;FIKT. ZIELPUFFER
+ 4110          BEQ LNCHK         ;IMMER..
+ 4113 LN1      LDA (INBUF),Y     
  4114          CMP #"."          
- 4115          BEQ LN5           
- 4116          INX               
- 4117 LN3      INY               ;NAECHSTES
- 4118          BIT PKTFL         
- 4119          BPL LN1           ;KEIN PUNKT
- 4120          CPX #4            ;EXT.<4
- 4121          BCC LN1           
- 4122 LN4      RTS               ;ERROR
- 4123 LN5      BIT PKTFL         
- 4124          BMI LN7           ;2. PUNKT
- 4125          DEC PKTFL         
- 4126          CPX #13           ;PUNKTPOS.
- 4127          BCS LN7           ;PUNKT ZU SPAET
- 4128          LDX #0            
- 4129          BEQ LN3           ;EXT.FELD
+ 4115          BNE LN5           
+ 4116          CPY #13           
+ 4117          BCS LN7           ;NAMESTEIL ZU LANG - FEHLER!
+ 4118          CPX #13           
+ 4119          BCS LN7           ;2. PUNKT - FEHLER!
+ 4120          LDX #12           ;PUNKTPOS., ZUM TYP
+ 4122 LN5      INX               
+ 4123          CPX #16           ;FIKT.PUFFER ENDE
+ 4124          BEQ LN6           ;ENDE, OK
+ 4125          INY               
+ 4126 LNCHK    CPY NLEN          ;INPUT ENDE?
+ 4127          BCC LN1           ;NAECHSTES
  4130 LN6      CLC               ;OK
  4131 LN7      RTS               
  4140 ;
@@ -342,21 +340,22 @@
  5258          STY CHKSML        ;PRUEFSUMME
  5260          STY CHKSMH        ;LOESCHEN
  5262 STL2     JSR RDBYTE        
- 5270          LDY TEMPA         ;VERIFY?
- 5272          BEQ STL3          
- 5273          LDY #0            
+ 5270          BIT TEMPA         ;VERIFY?
+ 5272          BPL STL3          
  5274          CMP (POINTL),Y    
  5275          BNE STLERR4       ;ERROR
  5276          .BY $2C           
  5277 STL3     STA (POINTL),Y    
  5278          LDX CHKSML        ;CHECKSUM
- 5280 STL4     LSR               ;BERECHNEN
- 5281          BCC STL5          ; 1EN ZAEHLEN
+ 5280 STLPLOOP LSR               ;BERECHNEN
+ 5281          BCC STLPNULL      ;1EN ZAEHLEN
  5282          INX               
- 5284          BNE STL4          
+ 5284          BNE STLPLOOP      
  5286          INC CHKSMH        
- 5288 STL5     BNE STL4          
+ 5287          BEQ STLPLOOP      ;UEBERLAUF - WEITER!
+ 5288 STLPNULL BNE STLPLOOP      
  5290          STX CHKSML        
+ 5291 ;
  5292          INC POINTL        ;POINTER
  5294          BNE STL6          ;ERHOEHEN
  5296          INC POINTH        
@@ -411,14 +410,18 @@
  6101 ;* LOAD ROUTINE
  6102 ;*****************************
  6103 ;
- 6106 LOAD     STA TEMPA         
+ 6106 LOAD     LSR               ;BIT0->C
+ 6107          ROR               ;C->BIT7
+ 6108          STA TEMPA         ;VERIFY FLAG
  6110          LDA #0            
  6111          STA STATUS        
  6112          LDA DN            ;DEVICE
  6113          CMP #7            ;SUPERTAPE
  6114          BEQ LO1           
- 6115          LDA TEMPA         
- 6116          JMP (BSLOD)       
+ 6115          LDA TEMPA         ;BIT7->
+ 6116          ASL               
+ 6117          ROL               ;BIT0
+ 6118          JMP (BSLOD)       ;ORIGINAL
  6119 LO1      LDY #(MSGPPT-MSGTXT)
  6120          JSR MSG           ;PRESS PLAY...
  6121          LDA #1            
@@ -455,7 +458,7 @@
  6162          JSR LVM           ;'LOADING/VERIFYING'
  6163          JSR OUTNAM        ;FILENAME
  6164          JSR STL           ;LOAD DATA
- 6165          BCC LO9           
+ 6165          BCC LOAUTO        
  6166          TAX               ;BREAK?
  6167          BNE LO6           
  6168 LOBRK    JMP SVBREAK       
@@ -482,12 +485,12 @@
  6201          LDX ENDL          
  6202          LDY ENDH          
  6204          RTS               
- 6205 LO9      JSR SVEXIT        
- 6206          LDA TEMPA         ;VERIFY?
- 6207          BNE LOEXIT        
+ 6205 LOAUTO   JSR SVEXIT        
+ 6206          BIT TEMPA         ;VERIFY?
+ 6207          BMI LOEXIT        
  6220          LDY #13           ;BASIC
  6221 LO10     LDA (CBUF),Y      ;AUTOSTART
- 6222          CMP LOAUTO-13,Y   
+ 6222          CMP LOAUT-13,Y    
  6223          BNE LO111         
  6224          INY               
  6225          CPY #15           
@@ -513,7 +516,7 @@
  6245          STA POINTH        
  6246          JSR LOEXIT        
  6247          JMP (POINTL)      
- 6248 LOAUTO   .TX "AUT"         
+ 6248 LOAUT    .TX "AUT"         
  6249 LORUN    .TX "RUN:"        
  6250          .BY $0D           
  6251 LOCOM    .TX "COM"         
@@ -523,7 +526,7 @@
  6503 ;
  6510 STP      JSR LNAME         
  6512          BCC STP0          
- 6514          LDA #01           
+ 6514          LDA #01           ;SYNTAXFEHLER
  6516          RTS               
  6518 STP0     TSX               ;STACKPOS.
  6520          STX STKT          ;MERKEN
@@ -540,12 +543,13 @@
  6616 STP1     JSR RDBYTE        ;BYTE VOM BAND
  6618          STA (CBUF),Y      ;ABLEGEN
  6626          LDX CHKSML        
- 6628 STP2     LSR               ;PRUEFSUM
- 6630          BCC STP3          ;BERECHNEN
+ 6628 STPPLOOP LSR               ;PRUEFSUM
+ 6630          BCC STPPNULL      ;BERECHNEN
  6632          INX               
- 6634          BNE STP2          
+ 6634          BNE STPPLOOP      
  6636          INC CHKSMH        
- 6638 STP3     BNE STP2          ;ALLE 1EN GEZAEHLT?
+ 6637          BEQ STPPLOOP      ;UEBERLAUF - WEITER!
+ 6638 STPPNULL BNE STPPLOOP      ;ALLE 1EN GEZAEHLT?
  6639          STX CHKSML        
  6642          INY               
  6644          CPY #$19          ;BLOCK ENDE
@@ -607,11 +611,14 @@
  7101 ;* WRITE BYTE
  7102 ;*****************************
  7103 ;
+ 7105 WRTAB    STA CHAR          ;GANZES BYTE
+ 7106          LDY #8            ;ALLE 8 BIT
+ 7107          BNE WBY1          ;IMMER
  7110 WRTA     STA CHAR          ;LOW NIBBLE
  7112 WRTB     LDY #4            ;HIGH NIBBLE
  7114 WBY1     LDA TIM0          
  7115          LSR CHAR          
- 7116          BCC WBY2          ; '0' OD. '1'
+ 7116          BCC WBY2          ;'0' OD. '1'
  7118          LDA TIM1          ;ZEIT F. '1'
  7120 WBY2     STA CNTBL         
  7122          LDA #$01          
@@ -647,15 +654,13 @@
  8112 WRITE    PHA               
  8115          LDX #64           ;ANZAHL D. SYNCS
  8116 WBL1     LDA #$16          ;SYNC
- 8118          JSR WRTA          
- 8120          JSR WRTB          
+ 8118          JSR WRTAB         
  8122          DEX               
  8124          BNE WBL1          
- 8126          PLA               
- 8128          JSR WRTA          ;BLOCKKENNUNG
- 8130          JSR WRTB          ;SCHREIBEN
- 8132          LDY #0            ;PRUEFSUMME
- 8134          STY CHKSML        
+ 8126          PLA               ;BLOCKKENNUNG
+ 8128          JSR WRTAB         ;SCHREIBEN
+ 8129 ;Y-REG NACH WRTAB IST IMMER 0!
+ 8134          STY CHKSML        ;PRUEFSUMME
  8136          STY CHKSMH        ;LOESCHEN
  8137          LDX POENL         
  8138 WBL2     LDA (POINTL),Y    
@@ -671,11 +676,9 @@
  8160          BNE WBL2          
  8162          LDX CHKSMH        ;PRUEFSUMME
  8164          LDA CHKSML        ;SPEICHERN
- 8166          JSR WRTA          
- 8168          JSR WRTB          
+ 8166          JSR WRTAB         
  8170          TXA               
- 8172          JSR WRTA          
- 8174          JSR WRTB          
+ 8172          JSR WRTAB         
  8176          JMP WRTA          ;SCHLUSSBIT
  9100 ;*****************************
  9101 ;* NAMENSPRUEFUNG SAVE

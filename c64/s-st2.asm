@@ -8,6 +8,8 @@
 ;*                              *
 ;*   VERBESSERT 6/6/1990 JK     *
 ;*              10/6/90         *
+;*   UEBERARBEITET 28/3/2012 JK *
+;*                              *
 ;********************************
 ;
          .MA RMB(N)        
@@ -42,7 +44,7 @@ POENL    ... RMB(1)        ;ENDPOINTER
 POENH    ... RMB(1)        
 ;
          .BA $93           ;TEMPORAERER AKKU
-TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG
+TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
 PKTFL    ... RMB(1)        
 TEMPY    ... RMB(1)        ;Y TEMPORAER
 ;
@@ -198,6 +200,7 @@ RD4      PLA
 ;* BYTE LESEN
 ;*****************************
 ;
+; Y-REG BIT7 MUSS IMMER 0 SEIN!
 RDBYTE   BIT WTFLAG        
          BPL RDBYTE        ;WARTEN
          STY WTFLAG        ;FLAG LOESCHEN
@@ -216,7 +219,7 @@ INS1     LDA CHAR
          STY CHAR          
          LDY #10           ;NOCH 10 SYNCS
          STY SFLAG         ;BYTEWEISE
-         STY WTFLAG        ;FLAG LOESCHEN
+         STY WTFLAG        ;FLAG LOESCHEN, BIT7
 INS2     JSR RDBYTE        ;BYTE EINLESEN
          CMP #$16          ;NOCH IMMER SYNC
          BNE INSYN         ;VON VORN
@@ -278,27 +281,22 @@ LNAME    LDA NLEN
          CMP #17           
          BCS LN7           ;ZU LANG
          LDY #0            
-         STY PKTFL         ;PUNKTFLAG
-         LDX #0            ;MISST FELDGROESSE
-LN1      CPY NLEN          
-         BCS LN6           ;FERTIG
-         LDA (INBUF),Y     
+         LDX #0            ;FIKT. ZIELPUFFER
+         BEQ LNCHK         ;IMMER..
+LN1      LDA (INBUF),Y     
          CMP #"."          
-         BEQ LN5           
-         INX               
-LN3      INY               ;NAECHSTES
-         BIT PKTFL         
-         BPL LN1           ;KEIN PUNKT
-         CPX #4            ;EXT.<4
-         BCC LN1           
-LN4      RTS               ;ERROR
-LN5      BIT PKTFL         
-         BMI LN7           ;2. PUNKT
-         DEC PKTFL         
-         CPX #13           ;PUNKTPOS.
-         BCS LN7           ;PUNKT ZU SPAET
-         LDX #0            
-         BEQ LN3           ;EXT.FELD
+         BNE LN5           
+         CPY #13           
+         BCS LN7           ;NAMESTEIL ZU LANG - FEHLER!
+         CPX #13           
+         BCS LN7           ;2. PUNKT - FEHLER!
+         LDX #12           ;PUNKTPOS., ZUM TYP
+LN5      INX               
+         CPX #16           ;FIKT.PUFFER ENDE
+         BEQ LN6           ;ENDE, OK
+         INY               
+LNCHK    CPY NLEN          ;INPUT ENDE?
+         BCC LN1           ;NAECHSTES
 LN6      CLC               ;OK
 LN7      RTS               
 ;
@@ -341,21 +339,22 @@ STL1     CLC
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
 STL2     JSR RDBYTE        
-         LDY TEMPA         ;VERIFY?
-         BEQ STL3          
-         LDY #0            
+         BIT TEMPA         ;VERIFY?
+         BPL STL3          
          CMP (POINTL),Y    
          BNE STLERR4       ;ERROR
          .BY $2C           
 STL3     STA (POINTL),Y    
          LDX CHKSML        ;CHECKSUM
-STL4     LSR               ;BERECHNEN
-         BCC STL5          ; 1EN ZAEHLEN
+STLPLOOP LSR               ;BERECHNEN
+         BCC STLPNULL      ;1EN ZAEHLEN
          INX               
-         BNE STL4          
+         BNE STLPLOOP      
          INC CHKSMH        
-STL5     BNE STL4          
+         BEQ STLPLOOP      ;UEBERLAUF - WEITER!
+STLPNULL BNE STLPLOOP      
          STX CHKSML        
+;
          INC POINTL        ;POINTER
          BNE STL6          ;ERHOEHEN
          INC POINTH        
@@ -410,14 +409,18 @@ SET2     STX CNTAL         ;TIMER
 ;* LOAD ROUTINE
 ;*****************************
 ;
-LOAD     STA TEMPA         
+LOAD     LSR               ;BIT0->C
+         ROR               ;C->BIT7
+         STA TEMPA         ;VERIFY FLAG
          LDA #0            
          STA STATUS        
          LDA DN            ;DEVICE
          CMP #7            ;SUPERTAPE
          BEQ LO1           
-         LDA TEMPA         
-         JMP (BSLOD)       
+         LDA TEMPA         ;BIT7->
+         ASL               
+         ROL               ;BIT0
+         JMP (BSLOD)       ;ORIGINAL
 LO1      LDY #(MSGPPT-MSGTXT)
          JSR MSG           ;PRESS PLAY...
          LDA #1            
@@ -454,7 +457,7 @@ LO5      JSR DELAY
          JSR LVM           ;'LOADING/VERIFYING'
          JSR OUTNAM        ;FILENAME
          JSR STL           ;LOAD DATA
-         BCC LO9           
+         BCC LOAUTO        
          TAX               ;BREAK?
          BNE LO6           
 LOBRK    JMP SVBREAK       
@@ -481,12 +484,12 @@ LOEXIT   CLC
          LDX ENDL          
          LDY ENDH          
          RTS               
-LO9      JSR SVEXIT        
-         LDA TEMPA         ;VERIFY?
-         BNE LOEXIT        
+LOAUTO   JSR SVEXIT        
+         BIT TEMPA         ;VERIFY?
+         BMI LOEXIT        
          LDY #13           ;BASIC
 LO10     LDA (CBUF),Y      ;AUTOSTART
-         CMP LOAUTO-13,Y   
+         CMP LOAUT-13,Y    
          BNE LO111         
          INY               
          CPY #15           
@@ -512,7 +515,7 @@ LO12     LDA (CBUF),Y      ;AUTOSTART
          STA POINTH        
          JSR LOEXIT        
          JMP (POINTL)      
-LOAUTO   .TX "AUT"         
+LOAUT    .TX "AUT"         
 LORUN    .TX "RUN:"        
          .BY $0D           
 LOCOM    .TX "COM"         
@@ -522,7 +525,7 @@ LOCOM    .TX "COM"
 ;
 STP      JSR LNAME         
          BCC STP0          
-         LDA #01           
+         LDA #01           ;SYNTAXFEHLER
          RTS               
 STP0     TSX               ;STACKPOS.
          STX STKT          ;MERKEN
@@ -539,12 +542,13 @@ LOSYNC   JSR INSYN         ;SYNCHRONISIEREN
 STP1     JSR RDBYTE        ;BYTE VOM BAND
          STA (CBUF),Y      ;ABLEGEN
          LDX CHKSML        
-STP2     LSR               ;PRUEFSUM
-         BCC STP3          ;BERECHNEN
+STPPLOOP LSR               ;PRUEFSUM
+         BCC STPPNULL      ;BERECHNEN
          INX               
-         BNE STP2          
+         BNE STPPLOOP      
          INC CHKSMH        
-STP3     BNE STP2          ;ALLE 1EN GEZAEHLT?
+         BEQ STPPLOOP      ;UEBERLAUF - WEITER!
+STPPNULL BNE STPPLOOP      ;ALLE 1EN GEZAEHLT?
          STX CHKSML        
          INY               
          CPY #$19          ;BLOCK ENDE
@@ -606,11 +610,14 @@ OUT1     LDA (CBUF),Y
 ;* WRITE BYTE
 ;*****************************
 ;
+WRTAB    STA CHAR          ;GANZES BYTE
+         LDY #8            ;ALLE 8 BIT
+         BNE WBY1          ;IMMER
 WRTA     STA CHAR          ;LOW NIBBLE
 WRTB     LDY #4            ;HIGH NIBBLE
 WBY1     LDA TIM0          
          LSR CHAR          
-         BCC WBY2          ; '0' OD. '1'
+         BCC WBY2          ;'0' OD. '1'
          LDA TIM1          ;ZEIT F. '1'
 WBY2     STA CNTBL         
          LDA #$01          
@@ -646,15 +653,13 @@ WBY6     DEY
 WRITE    PHA               
          LDX #64           ;ANZAHL D. SYNCS
 WBL1     LDA #$16          ;SYNC
-         JSR WRTA          
-         JSR WRTB          
+         JSR WRTAB         
          DEX               
          BNE WBL1          
-         PLA               
-         JSR WRTA          ;BLOCKKENNUNG
-         JSR WRTB          ;SCHREIBEN
-         LDY #0            ;PRUEFSUMME
-         STY CHKSML        
+         PLA               ;BLOCKKENNUNG
+         JSR WRTAB         ;SCHREIBEN
+;Y-REG NACH WRTAB IST IMMER 0!
+         STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
          LDX POENL         
 WBL2     LDA (POINTL),Y    
@@ -670,11 +675,9 @@ WBL3     JSR WRTB
          BNE WBL2          
          LDX CHKSMH        ;PRUEFSUMME
          LDA CHKSML        ;SPEICHERN
-         JSR WRTA          
-         JSR WRTB          
+         JSR WRTAB         
          TXA               
-         JSR WRTA          
-         JSR WRTB          
+         JSR WRTAB         
          JMP WRTA          ;SCHLUSSBIT
 ;*****************************
 ;* NAMENSPRUEFUNG SAVE
