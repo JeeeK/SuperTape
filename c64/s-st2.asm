@@ -6,6 +6,8 @@
 ;*                              *
 ;*   ERSTELLT 27/5/1990, JK     *
 ;*                              *
+;*   VERBESSERT 6/6/1990 JK     *
+;*              10/6/90         *
 ;********************************
 ;
          .MA RMB(N)        
@@ -13,7 +15,6 @@ HERE     .BA HERE+N
          .RT               
 ;
 .EQ CPORT   = $01    ; MP-PORT
-.EQ PKTFL   = $02    ; FLAG
 .EQ LOSPDL  = $46    ; TIMER
 .EQ LOSPDH  = $81    ;  3600 BD
 .EQ LOCMP   = $73
@@ -41,8 +42,8 @@ POENL    ... RMB(1)        ;ENDPOINTER
 POENH    ... RMB(1)        
 ;
          .BA $93           ;TEMPORAERER AKKU
-TEMPA    ... RMB(1)        ;TEMP.AKKU
-TEMPB    ... RMB(1)        
+TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG
+PKTFL    ... RMB(1)        
 TEMPY    ... RMB(1)        ;Y TEMPORAER
 ;
 .EQ STATUS  = $90
@@ -53,21 +54,22 @@ TEMPY    ... RMB(1)        ;Y TEMPORAER
 .EQ BASAH   = BASAL+1
 .EQ ANFL    = $C1 ;ANF.ADR.
 .EQ ANFH    = ANFL+1
+.EQ LANF    = $C3
 .EQ ENDL    = $AE ;END-ADR.
 .EQ ENDH    = ENDL+1
-.EQ MFLAG   = $C0 ;MOTOR EIN
+.EQ MFLAG   = $C0  ;MOTORFLAG
 .EQ STW     = $D9 ;TIMER START
+.EQ CBUF    = $F9 ;POINTER AUF KASSETTENPUFFER
 .EQ TIM0    = $FB ;TIMER WERT '0'
 .EQ TIM1    = TIM0+1 ; -"-    '1'
 .EQ TPUF    = $277 ;TAST.PUFFER
 ;
-.EQ IRQT    = $29F ;TEMP F IRQ
 .EQ IRQV    = $314 ;IRQ VEKTOR
 .EQ NMIV    = $318 ;NMI VEKTOR
-.EQ PUFFER  = $33C ;EINGABEPUFFER
-.EQ CNTAL   = $DC04 ;TIMER LOW
+.EQ PUFFER  = $33C ;KASSETTENPUFFER
+.EQ CNTAL   = $DC04 ;TIMER LOW (LOAD)
 .EQ CNTAH   = CNTAL+1;     HIGH
-.EQ CNTBL   = $DD04 ;TIMER LOW
+.EQ CNTBL   = $DD04 ;TIMER LOW (SAVE)
 .EQ CNTBH   = CNTBL+1;     HIGH
 .EQ ICR     = $DC0D ;INT.REG.
 .EQ ICRB    = $DD0D ;INT.REG.
@@ -75,22 +77,21 @@ TEMPY    ... RMB(1)        ;Y TEMPORAER
 .EQ TST     = ICRB+1 ;TIMER START
 .EQ VICRG   = $D011
 ;
-.EQ WARM    = $A002 ;WARMSTART
-.EQ BRES    = $FC93 ;MOT AUS
-.EQ LDREG   = $FDA3
+.EQ BREAK   = $A381 ;BREAK-TEXT
+.EQ CIAINIT = $FDA3
 .EQ ERRM    = $A369 ;MELDUNG ERROR
-.EQ ERRMEL  = $A43A ;SYNTAX ERR.
-.EQ PRESSP  = $F817 ;PRESS PLAY
-.EQ PRESSR  = $F838 ;PRESS RECORD
-.EQ FOUND   = $F12F ;FOUND
+.EQ BSMSG   = $F12F ;MESSAGE OUT
 .EQ LVM     = $F5D2 ;LOADING/VER.
-.EQ BETRL   = $F4AB ;LOAD NORM.
-.EQ BETRSA  = $F5ED ;SAVE NORM.
 .EQ BSOUT   = $FFD2 ;CHAR.OUT
+.EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-;
-.BA $CA7D
+.BA $C949
+NMIT     .WO 0             
+IRQT     .WO 0             
+STKT     .BY 0             
+BSSAV    .WO 0             
+BSLOD    .WO 0             
 ;*****************************
 ;* DELAY-HOCHLAUFZEIT
 ;*****************************
@@ -103,20 +104,42 @@ DEL1     DEX
          BNE DEL1          
          RTS               
 ;*****************************
-;* NAMENSFEHLERMELDUNG
+;* FEHLERMELDUNG AUSGEBEN
 ;*****************************
 ;
-SERROR   LDY #0            
-SER1     LDA SER2,Y        ;MELDUNG
-         INY               
+MSG      BIT $9D           ;DIREKTMODUS FLAG
+         BPL MSGEXIT       
+MSG1     LDA MSGTXT,Y      
+         PHP               
+         AND #$7F          ;BIT 7 WEG
          JSR BSOUT         ;AUSGEBEN
-         CMP #0            
-         BNE SER1          
-         PLA               
-         PLA               
+         INY               
+         PLP               
+         BPL MSG1          ;MESSAGEENDE?
+MSGEXIT  CLC               
          RTS               
-SER2     .TX "? FILENAME INVALID"
-         .BY $0D,0         
+;
+MSGTXT   .BY $0D,$0D       
+         .TX " **** SUPERTAPE V2.0  AKTIVIERT ****"
+         .BY $0D,$8D       
+MSGPPT   .BY $0D           
+         .TX "PRESS PLAY ON TAP"
+         .BY $C5           ; 'E'+$80
+MSGPPRT  .BY $0D           
+         .TX "PRESS RECORD & PLAY ON TAP"
+         .BY $C5           ; 'E'+$80
+MSGIFN   .BY $0D           
+         .TX "? INVALID FILENAME"
+         .BY $8D           
+MSGBPB   .BY $0D           
+         .TX "? BAD PARA-BLOCK"
+         .BY $8D           
+MSGBCS   .BY $0D           
+         .TX "? BAD CHECKSUM"
+         .BY $8D           
+MSGSE    .BY $0D           
+         .TX "? BAD SYNC"  
+         .BY $8D           
 ;*****************************
 ;* IRQ-LESEROUTINE
 ;*
@@ -153,7 +176,6 @@ RD2      LDA #0            ;T1
 RD3      LDA OPFLAG        ;PHASENVERSCHIEBUNG MERKEN
          EOR #$80          
          STA OPFLAG        
-         BIT OPFLAG        ; ***
          BPL RD4           ;EXIT
 RDBIT0   CLC               
 RDBIT    ROR CHAR          
@@ -171,7 +193,6 @@ RD4      PLA
          TAX               
          PLA               
          RTI               
-         RTS               ; ***
 ;
 ;*****************************
 ;* BYTE LESEN
@@ -196,10 +217,7 @@ INS1     LDA CHAR
          LDY #10           ;NOCH 10 SYNCS
          STY SFLAG         ;BYTEWEISE
          STY WTFLAG        ;FLAG LOESCHEN
-INS2     BIT WTFLAG        ;WARTEN
-         BPL INS2          
-         STY WTFLAG        
-         LDA BUFF          
+INS2     JSR RDBYTE        ;BYTE EINLESEN
          CMP #$16          ;NOCH IMMER SYNC
          BNE INSYN         ;VON VORN
          DEY               
@@ -213,13 +231,31 @@ INS3     JSR RDBYTE
 ;* SUPERTAPE VERLASSEN
 ;*****************************
 ;
-ENDSR    JSR BRES          ;SYS.RESET
-         LDA #$47          
-         STA NMIV          ;NMI-VEKTOR
-         LDA #$FE          ;WIEDER-
-         STA NMIV+1        ;HERSTELLEN
-         CLC               
-         CLI               
+ENDSR    PHA               
+         PHP               
+         SEI               
+         LDA VICRG         
+         ORA #$10          ;SCREEN ENABLE
+         STA VICRG         
+         LDA CPORT         
+         ORA #$20          ;MOTOR AUS
+         STA CPORT         
+         LDA #$7F          ;INT.CONTR.
+         STA ICR           ;REG.
+         STA ICRB          ;LOESCHEN
+         LDA #$08          ;ONE SHOT
+         STA CRA           
+         STA TST           
+         LDA IRQT          
+         STA IRQV          
+         LDA IRQT+1        ;VEKTOREN
+         STA IRQV+1        ;WIEDER
+         LDA NMIT          
+         STA NMIV          ;HERSTELLEN
+         LDA NMIT+1        
+         STA NMIV+1        
+         PLP               
+         PLA               
          RTS               
 ;
 ;*****************************
@@ -227,8 +263,12 @@ ENDSR    JSR BRES          ;SYS.RESET
 ;*****************************
 ;
 BRKSR    JSR ENDSR         
-         JSR LDREG         
-         JMP (WARM)        ;INS BASIC
+         LDX STKT          ;STACK AM BEGINN
+         TXS               
+         CLI               
+         LDA #0            ;FEHLERCODE BREAK
+         SEC               ;FEHLER
+         RTS               
 ;
 ;*****************************
 ;* NAMENSPRUEFUNG LOAD
@@ -236,14 +276,13 @@ BRKSR    JSR ENDSR
 ;
 LNAME    LDA NLEN          
          CMP #17           
-         BCS LN4           ;ZU LANG
+         BCS LN7           ;ZU LANG
          LDY #0            
          STY PKTFL         ;PUNKTFLAG
          LDX #0            ;MISST FELDGROESSE
 LN1      CPY NLEN          
-         BCC LN2           
-         RTS               ;OK
-LN2      LDA (INBUF),Y     
+         BCS LN6           ;FERTIG
+         LDA (INBUF),Y     
          CMP #"."          
          BEQ LN5           
          INX               
@@ -252,273 +291,329 @@ LN3      INY               ;NAECHSTES
          BPL LN1           ;KEIN PUNKT
          CPX #4            ;EXT.<4
          BCC LN1           
-LN4      JMP SERROR        ;SYNTAX FEHLER
+LN4      RTS               ;ERROR
 LN5      BIT PKTFL         
-         BMI LN4           ;2. PUNKT
+         BMI LN7           ;2. PUNKT
          DEC PKTFL         
          CPX #13           ;PUNKTPOS.
-         BCS LN4           ;PUNKT ZU SPAET
+         BCS LN7           ;PUNKT ZU SPAET
          LDX #0            
-         JMP LN3           ;EXT.FELD
+         BEQ LN3           ;EXT.FELD
+LN6      CLC               ;OK
+LN7      RTS               
 ;
 ;*****************************
 ;* DATENBLOCK LADEN
 ;*****************************
 ;
-BFOUND   LDA SECA          ;SEK-ADR
-         BNE LB1           
-         LDA BASAL         ;BASIC
-         STA POINTL        ;START
-         LDA BASAH         
-         STA POINTH        
-         BNE LB2           
-LB1      LDA PUFFER+17     
+STL      SEI               
+         TSX               ;STACKPOINTER
+         STX STKT          ;ABSPEICHERN
+         JSR SETUP         ;LESEROUTINE AUFSETZEN
+         LDY #17           
+         LDA (CBUF),Y      
+         INY               
          STA POINTL        ;ABSOLUT
-         LDA PUFFER+18     ;LOAD
+         LDA (CBUF),Y      ;LOAD
+         INY               
          STA POINTH        
-LB2      CLC               
+         LDA SECA          
+         BNE STL1          
+         LDA LANF          
+         STA POINTL        ;AN GEGEBENE
+         LDA LANF+1        ;ADR.
+         STA POINTH        
+STL1     CLC               
          LDA POINTL        
-         ADC PUFFER+19     
+         ADC (CBUF),Y      
          STA ENDL          
+         INY               
          LDA POINTH        
-         ADC PUFFER+20     
+         ADC (CBUF),Y      
          STA ENDH          ;ENDADR
-         BIT PUFFER+16     
-         BPL LB3           ;3600 BAUD
-         LDA #HISPDL       
-         STA CNTAL         ;TIMER
-         LDA #HISPDH       ; 7200
-         STA CNTAH         
-         LDA #HICMP        ;ZEITLIMIT F T3
-         STA TLIM          
-LB3      JSR INSYN         
+         LDY #16           
+         LDA (CBUF),Y      ;BAUDRATE
+         JSR SETTIMER      ;TIMERINTERRUPT
+         CLI               
+         JSR INSYN         
          CMP #$C5          ;START
-         BNE LBERR         
+         BNE STLERR3       
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
-LB4      BIT WTFLAG        
-         BPL LB4           ;WARTEN
-         STY WTFLAG        
-         LDA BUFF          
-         BIT TEMPB         ;VERIFY?
-         BMI LBVERI        
-         STA (POINTL),Y    
-LB5      SEC               ; PRUEFSUMME
-         ROR               ;BERECHNEN
-LB6      BCC LB7           
-         INC CHKSML        
-         BNE LB7           
+STL2     JSR RDBYTE        
+         LDY TEMPA         ;VERIFY?
+         BEQ STL3          
+         LDY #0            
+         CMP (POINTL),Y    
+         BNE STLERR4       ;ERROR
+         .BY $2C           
+STL3     STA (POINTL),Y    
+         LDX CHKSML        ;CHECKSUM
+STL4     LSR               ;BERECHNEN
+         BCC STL5          ; 1EN ZAEHLEN
+         INX               
+         BNE STL4          
          INC CHKSMH        
-LB7      LSR               
-         BNE LB6           
-         INC POINTL        
-         BNE LB8           
+STL5     BNE STL4          
+         STX CHKSML        
+         INC POINTL        ;POINTER
+         BNE STL6          ;ERHOEHEN
          INC POINTH        
-LB8      LDA POINTL        
+STL6     LDA POINTL        
          CMP ENDL          ;ENDE?
-         BNE LB4           ;WEITER LESEN
+         BNE STL2          ;WEITER LESEN
          LDA POINTH        
          CMP ENDH          
-         BNE LB4           
-LB9      BIT WTFLAG        ;PRUEFSUMME
-         BPL LB9           ;LESEN
-         STY WTFLAG        
-         LDA BUFF          
-         CMP CHKSML        
-LBERR    BNE LBERR1        
-LB10     BIT WTFLAG        ;UND
-         BPL LB10          ;TESTEN
-         STY WTFLAG        
-         LDA BUFF          
+         BNE STL2          
+         JSR RDBYTE        ;PRUEFSUMME
+         CMP CHKSML        ;LESEN
+         BNE STLERR2       
+         JSR RDBYTE        ;UND TESTEN
          CMP CHKSMH        
-         BNE LBERR1        
-         JSR LVM           ;MELDUNG
-         LDA #" "          
-         JSR BSOUT         
-         JSR OUTNAM        
-         JSR LBEND         
-         LDY #3            ;BASIC
-LB11     LDA PUFFER+12,Y   ;AUTOSTART
-         CMP LBAUTO,Y      
-         BNE LB12          
-         DEY               
-         BNE LB11          
-LB13     LDA LBRUN,Y       
-         STA TPUF,Y        
-         INY               ;TASTATURPUFFER
-         CPY #4            
-         BNE LB13          
-         STY PUFLEN        
-LB12     LDY #3            ;M/C
-LB14     LDA PUFFER+12,Y   ;AUTOSTART
-         CMP LBCOM,Y       
-         BNE LBEXIT        
-         DEY               
-         BNE LB14          
-         JMP (PUFFER+17)   
-LBVERI   CMP (POINTL),Y    
-         BEQ LB5           
-LBERR1   LDA ERRM,Y        ;FEHLERMELDUNG
-         BEQ LBEND         
-         JSR BSOUT         
-         INY               
-         BNE LBERR1        
-LBEND    JSR ENDSR         ;MOTOR AUS
-LBEXIT   LDX ENDL          
-         LDY ENDH          
-         LDA #0            
-         CLC               
-         RTS               
+         BEQ STLEXIT       
+STLERR2  LDA #2            ;BAD CHECKSUM
+         .BY $2C           
+STLERR3  LDA #3            ;SYNC ERROR
+         .BY $2C           
+STLERR4  LDA #4            ;VERIFY ERROR
+         SEC               
+         .BY $24           
+STLEXIT  CLC               
+         LDX POINTL        
+         STX ENDL          
+         LDX POINTH        
+         STX ENDH          
+         CLI               
+         JMP ENDSR         
 ;
-LBAUTO   .TX " AUT"        
-LBRUN    .TX "RUN"         
-         .BY $0D           
-LBCOM    .TX " COM"        
+;*****************************
+;* TIMER SETZEN (BAUDRATE)
+;*****************************
+;
+SETTIMER BPL SET1          
+         LDX #HISPDL       ;7200
+         LDY #HISPDH       ;BAUD
+         LDA #HICMP        
+         BNE SET2          
+SET1     LDX #LOSPDL       ;3600
+         LDY #LOSPDH       ;BAUD
+         LDA #LOCMP        
+SET2     STX CNTAL         ;TIMER
+         STY CNTAH         ;WERT
+         STA TLIM          ;ZEITLIMIT F.T3
+         LDA #$7F          
+         STA ICR           
+         LDA #$90          
+         STA ICR           ;TIMER INTERRUPT
+         RTS               
 ;*****************************
 ;* LOAD ROUTINE
 ;*****************************
 ;
-LOAD     SEI               ;INT.SPERREN
-         STA TEMPA         
-         LSR               
-         ROR               ;VERIFY
-         STA TEMPB         ;FLAG
+LOAD     STA TEMPA         
          LDA #0            
          STA STATUS        
          LDA DN            ;DEVICE
          CMP #7            ;SUPERTAPE
          BEQ LO1           
+         LDA TEMPA         
+         JMP (BSLOD)       
+LO1      LDY #(MSGPPT-MSGTXT)
+         JSR MSG           ;PRESS PLAY...
+         LDA #1            
+         STA MFLAG         
+         LDA #<(PUFFER)    ;KASSETTENPUFFER
+         STA CBUF          ;SETZEN
+         LDA #>(PUFFER)    
+         STA CBUF+1        
+LO3      JSR STP           ;FILE SUCHEN
+         BCC LO4           
+         TAX               ;BREAK?
+         BEQ LOBRK         
+         CMP #02           ;PARA.BLOCK
+         BNE LO31          ;FEHLERHAFT?
+         LDY #(MSGBPB-MSGTXT)
+LO32     JSR MSG           
+         BCC LO3           
+LO31     CMP #01           ;FILENAMENSYNTAX FALSCH?
+         BNE LO3           ;SONST WEITER SUCHEN
+         LDY #(MSGIFN-MSGTXT)
+         BNE LO61          
+LO4      PHA               ;FEHLERCODE
+         LDY #$63          ;'FOUND'
+         JSR BSMSG         
+         JSR OUTNAM        ;FILENAME
+         LDA #4            
+         STA TEMPY         
+LO5      JSR DELAY         
+         DEC TEMPY         ;2 SEK
+         BNE LO5           
+         PLA               
+         TAX               
+         BEQ LO3           ;FILE PASST NICHT
+         JSR LVM           ;'LOADING/VERIFYING'
+         JSR OUTNAM        ;FILENAME
+         JSR STL           ;LOAD DATA
+         BCC LO9           
+         TAX               ;BREAK?
+         BNE LO6           
+LOBRK    JMP SVBREAK       
+LO6      CMP #2            ;BAD CHECKSUM?
+         BNE LO7           
+         LDY #(MSGBCS-MSGTXT)
+LO61     JSR MSG           
+         BCC LO81          
+LO7      CMP #3            ;SYNC-ERROR?
+         BNE LO8           
+         LDY #(MSGSE-MSGTXT)
+         BNE LO61          
+LO8      CMP #4            ;VERIFY-ERROR?
+         BNE LOEXIT        
+         LDA STATUS        
+         ORA #$10          
+         STA STATUS        
+         JSR SVEXIT        
          SEC               
-         AND #$0E          
-         BNE LO2           ;IEC OD. TAPE
-         CLC               
-LO2      JMP BETRL         
-LO1      JSR LNAME         ;SYNTAXCHECK
-         JSR PRESSP        ;PLAYTASTE?
-         LDA CPORT         ;MOTOR
-         AND #$1F          ;EIN
-         STA CPORT         
-         STA MFLAG         ;MOTOR ON-FLAG
+         RTS               
+LO81     JSR SVEXIT        
+         LDA #$1D          
+         SEC               
+         .BY $24           
+LOEXIT   CLC               
+         LDX ENDL          
+         LDY ENDH          
+         RTS               
+LO9      JSR SVEXIT        
+         LDY #12           ;BASIC
+LO10     LDA (CBUF),Y      ;AUTOSTART
+         CMP LOAUTO-12,Y   
+         BNE LO111         
+         INY               
+         CPY #15           
+         BNE LO10          
+         LDY #5            
+         STY PUFLEN        
+LO11     LDA LORUN-1,Y     
+         STA TPUF-1,Y      
+         DEY               ;TASTATURPUFFER
+         BNE LO11          
+LO111    LDY #12           ;M/C
+LO12     LDA (CBUF),Y      ;AUTOSTART
+         CMP LOCOM-12,Y    
+         BNE LOEXIT        
+         INY               
+         CPY #15           
+         BNE LO12          
+         LDY #17           
+         LDA (CBUF),Y      ;ANF.ADR.
+         STA POINTL        ;COM-FILE
+         INY               ;STARTEN
+         LDA (CBUF),Y      
+         STA POINTH        
+         JSR LOEXIT        
+         JMP (POINTL)      
+LOAUTO   .TX "AUT"         
+LORUN    .TX "RUN:"        
+         .BY $0D           
+LOCOM    .TX "COM"         
+;*****************************
+;* LOAD POSITIONIER-ROUTINE
+;*****************************
+;
+STP      JSR LNAME         
+         BCC STP0          
+         LDA #01           
+         RTS               
+STP0     TSX               ;STACKPOS.
+         STX STKT          ;MERKEN
+         JSR SETUP         
          JSR DELAY         
-         LDA #<(BRKSR)     ;BREAK-
-         STA NMIV          ;ROUTINE
-         LDA #>(BRKSR)     ;AUFSETZEN
-         STA NMIV+1        
-         LDA IRQV          ;IRQ-VEKT.
-         STA IRQT          
-         LDA IRQV+1        ;RETTEN
-         STA IRQT+1        
-         LDA #<(RDDATA)    ;LESEROUTINE
-         STA IRQV          
-         LDA #>(RDDATA)    ;AUFSETZEN
-         STA IRQV+1        
-         LDA #$7F          ;INT.MASK
-         STA ICR           ;LOESCHEN
-         LDA #$90          ;UND NEU
-         STA ICR           ;SETZEN
-         LDA VICRG         ;DISPLAY
-         AND #$EF          
-         STA VICRG         ;DISABLE
-         LDA #LOSPDL       
-         STA CNTAL         ;TIMER
-         LDA #LOSPDH       ; 3600
-         STA CNTAH         
-         LDA #LOCMP        ;ZEITLIMIT F. T3
-         STA TLIM          
+         LDA #0            ;N-FLAG=0=>3600 BAUD
+         JSR SETTIMER      ;TIMER SETZEN
          CLI               ;LOS GEHTS
 LOSYNC   JSR INSYN         ;SYNCHRONISIEREN
          CMP #$2A          ;STARTZEICHEN?
          BNE LOSYNC        
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
-LOPARA   BIT WTFLAG        
-         BPL LOPARA        ;WARTEN
-         STY WTFLAG        
-         LDA BUFF          
-         STA PUFFER,Y      
-         SEC               
-         ROR               ;PRUEFSUMME
-LO3      BCC LO4           ;BERECHNEN
-         INC CHKSML        
-         BNE LO4           
+STP1     JSR RDBYTE        ;BYTE VOM BAND
+         STA (CBUF),Y      ;ABLEGEN
+         LDX CHKSML        
+STP2     LSR               ;PRUEFSUM
+         BCC STP3          ;BERECHNEN
+         INX               
+         BNE STP2          
          INC CHKSMH        
-LO4      LSR               
-         BNE LO3           
+STP3     BNE STP2          ;ALLE 1EN GEZAEHLT?
+         STX CHKSML        
          INY               
          CPY #$19          ;BLOCK ENDE
-         BCC LOPARA        
+         BCC STP1          
          JSR RDBYTE        
          CMP CHKSML        
-         BNE LOERR1        
+         BNE STPERR1       
          JSR RDBYTE        
          CMP CHKSMH        ;PRUEFSUMME
-         BNE LOERR1        ;TESTEN
+         BNE STPERR1       ;TESTEN
          LDY #0            
-         CPY NLEN          ;KEIN NAME
-         BEQ LOFOUND       ;OK
-         LDY #0            ;***
-         CPY NLEN          ;***
-         BEQ LOFOUND       ;***
          STY TEMPY         
-         STY PKTFL         
          LDX #0            
-LO5      LDA (INBUF),Y     
-         CMP #"."          ;EXTENSION?
-         BEQ LO8           
-         CMP #"*"          
-         BEQ LO9           
-         LDY TEMPY         
-         CMP #"?"          
-         BEQ LO6           ;NAECHSTES ZEICHEN
-         CMP PUFFER,Y      
-         BNE LOERR2        ;NAECHSTES FILE
-LO6      INY               
-LO7      INX               
-         CPX NLEN          
-         BCS LOFOUND       ;OK
-         STY TEMPY         
+STP5     CPX NLEN          
+         BCS STPFND        ;FERTIG?
          TXA               
          TAY               
-         BCC LO5           ;WEITER
-LO8      DEC PKTFL         ;PUNKT WAR DA
-         LDY #13           ;PUNKTPOS.
-         JMP LO7           
-LO9      BIT PKTFL         ;PUNKT DOPPELT?
-         BMI LOFOUND       ;OK
-         LDY #12           
-         JMP LO7           
-LOERR2   JSR LBEND         
-         LDY #$63          ;OFFSET
-         JSR FOUND         ;MELDUNG
-         LDA #$20          
-         JSR OUTNAM        ;NAMEN AUSGEBEN
-         LDA #3            
-         STA TEMPA         
-LO10     JSR DELAY         ;CA.2 SEK
-         DEC TEMPA         
-         BNE LO10          
-         SEI               
-         JMP LO1           
-OUTNAM   LDY #0            
-OUT1     LDA PUFFER,Y      
+         LDA (INBUF),Y     
+         CMP #"."          ;EXTENSION?
+         BEQ STP8          
+         CMP #"*"          
+         BEQ STP9          
+         CMP #"?"          
+         BEQ STP6          ;NAECHSTES ZEICHEN
+         LDY TEMPY         
+         CMP (CBUF),Y      
+         BNE STPERR2       ;NAECHSTES FILE
+STP6     INC TEMPY         
+STP7     INX               
+         BNE STP5          ;NAECHSTES ZEICHEN
+STP8     LDY #12           ;EXTENSION
+         STY TEMPY         ;FELD
+         BNE STP6          ;PUNKT UEBERLESEN
+STP9     LDY #12           
+         CPY TEMPY         ;EXTENSION?
+         BCC STPFND        ;OK
+         STY TEMPY         
+         BCS STP7          ;WEITER
+STPERR1  LDA #02           ;BAD CHECKSUM
+         SEC               
+STP10    CLI               
+         JMP ENDSR         
+STPERR2  LDA #0            ;NICHT RICHTIGES FILE
+STP11    CLC               ;GEFUNDEN
+         BCC STP10         
+STPFND   LDA #1            ;RICHTIGES FILE
+         BNE STP11         ;GEFUNDEN
+;
+OUTNAM   LDA #" "          
+         JSR BSOUT         
+         LDY #0            
+OUT1     LDA (CBUF),Y      
          JSR BSOUT         
          INY               
          CPY #16           
          BCC OUT1          
          RTS               
-LOERR1   JMP LBERR1        
-LOFOUND  JMP BFOUND        ;DATENBLOCK LADEN
 ;*****************************
 ;* WRITE BYTE
 ;*****************************
 ;
 WRTA     STA CHAR          ;LOW NIBBLE
 WRTB     LDY #4            ;HIGH NIBBLE
+         LDA TIM0          
 WBY1     LSR CHAR          
          BCC WBY2          ; '0' OD. '1'
          LDA TIM1          ;ZEIT F. '1'
-         STA CNTBL         
-WBY2     LDA #$01          
+WBY2     STA CNTBL         
+         LDA #$01          
 WBY3     BIT ICRB          ;TIME OUT
          BEQ WBY3          
          LDA #STW          
@@ -538,15 +633,10 @@ WBY4     BIT ICRB
          DEY               
          BNE WBY1          ;NAECHSTES BIT
          RTS               
-WBY5     LDA CHKSML        ;PRUEFSUMME
-         ADC #00           
-         STA CHKSML        ;BERECHNEN
-         LDA CHKSMH        
-         ADC #0            
-         STA CHKSMH        
-         LDA TIM0          ;ZEIT F. '0'
-         STA CNTBL         
-         DEY               
+WBY5     INC CHKSML        ;PRUEFSUMME
+         BNE WBY6          
+         INC CHKSMH        ;BERECHNEN
+WBY6     DEY               
          BNE WBY1          
          RTS               
 ;*****************************
@@ -566,14 +656,14 @@ WBL1     LDA #$16          ;SYNC
          LDY #0            ;PRUEFSUMME
          STY CHKSML        
          STY CHKSMH        ;LOESCHEN
+         LDX POENL         
 WBL2     LDA (POINTL),Y    
          JSR WRTA          
          INC POINTL        ;ZEIGER ERHOEHEN
          BNE WBL3          
          INC POINTH        
 WBL3     JSR WRTB          
-         LDA POINTL        ;BLOCKENDE?
-         CMP POENL         
+         CPX POINTL        ;BLOCKENDE
          BNE WBL2          
          LDA POINTH        
          CMP POENH         
@@ -592,94 +682,113 @@ WBL3     JSR WRTB
 ;
 SNAME    LDY #0            
          LDA #" "          
-SN1      STA PUFFER,Y      
-         INY               
+SN1      STA (CBUF),Y      ;PUFFER
+         INY               ;LOESCHEN
          CPY #16           
          BCC SN1           
          LDY #0            
          STY PKTFL         
          STY TEMPY         
-         CPY NLEN          
-         BEQ SN4           ;EXIT
-         TYA               
-         TAX               
-SN2      LDA (INBUF),Y     
+SN2      LDY TEMPY         
+         CPY NLEN          ;FERTIG?
+         BEQ SN4           ;OK
+         LDA (INBUF),Y     ;FILENAME
          CMP #"."          
-         BNE SN5           
+         BNE SN3           
          CPY #13           ;PUNKTPOS.
          BCS SN6           ;FEHLER
-         BIT PKTFL         
-         BMI SN6           ;PUNKT DOPPELT
-         DEC PKTFL         ;PUNKT MERKEN
-         LDY #12           
-SN3      STA PUFFER,Y      
-         INY               
-         STY TEMPY         
-         CPY #16           
-         BCS SN4           ;EXIT
-         INX               
-         CPX NLEN          ;FERTIG?
-         BCS SN4           ;EXIT
-         TXA               
-         TAY               
-         JMP SN2           
-SN4      RTS               
-SN5      LDY TEMPY         
-         JMP SN3           
-SN6      JMP SERROR        
+         LDY PKTFL         
+         CPY #13           ;PUNKT DOPPELT
+         BCS SN6           
+         LDY #12           ;PUNKTPOS.
+         STY PKTFL         
+SN3      LDY PKTFL         ;IN KASSETTEN-
+         STA (CBUF),Y      ;PUFFER
+         INY               ;UEBERTRAGEN
+         STY PKTFL         
+         INC TEMPY         ;NAECHSTES
+         BNE SN2           ;ZEICHEN
+SN4      CLC               ;OK
+         RTS               
+SN6      SEC               ;ERROR
+         RTS               
 ;*****************************
-;* SUPERTAPE SAVE
+;* SUPERTAPE BETRIEBSSYS.SAVE
 ;*****************************
 ;
 SAVE     LDA DN            ;DEVICE#
          CMP #7            ;SUPERTAPE?
          BEQ SV2           
+SV1      JMP (BSSAV)       ;ZUM ALTEN VEKTOR
+SV2      LDY #(MSGPPRT-MSGTXT)
+         JSR MSG           ;PRESS PLAY ...
+         LDA #1            
+         STA MFLAG         
+         LDA #<(PUFFER)    
+         STA CBUF          
+         LDA #>(PUFFER)    ;KASSETTEN-PUFFER
+         STA CBUF+1        ;BESTIMMEN
+         JSR STS           ;ABSPEICHERN
+         BCC SVEXIT        
+         CMP #00           ;BREAK?
+         BNE SVIFN         
+SVBREAK  JSR SVEXIT        ;BREAK
+         LDA #0            ;MELDUNG
          SEC               
-         AND #$0E          
-         BNE SV1           
+         RTS               
+SVIFN    LDY #(MSGIFN-MSGTXT)
+         JSR MSG           ;INVALID FILENAME
+SVEXIT   JSR CIAINIT       
          CLC               
-SV1      JMP BETRSA        
-SV2      JSR SNAME         ;NAMEN PRUEFEN
-         SEI               
-         JSR PRESSR        ;BANDTASTE WARTEN
-         LDA CPORT         
-         AND #$1F          ;MOT.EIN
-         STA CPORT         
-         STA MFLAG         ;MOTOR ON FLAG
+         CLI               
+         RTS               
+;*****************************
+;* SUPERTAPE SAVE
+;*****************************
+;
+STS      JSR SNAME         
+         BCC STS0          
+         LDA #01           ;ERRORCODE
+         RTS               
+STS0     TSX               
+         STX STKT          ;STACK MERKEN
+         JSR SETUP         
          JSR DELAY         
-         LDA #<(BRKSR)     ;BREAK ROUTINE
-         STA NMIV          
-         LDA #>(BRKSR)     ;AUFSETZEN
-         STA NMIV+1        
-         LDA VICRG         ;SCREEN
-         AND #$EF          ;DISABLE
-         STA VICRG         
+         LDY #16           
          LDA SECA          ;SEK.ADR.
-         STA PUFFER+16     ;BAUDRATE
+         STA (CBUF),Y      ;BAUDRATE
+         INY               
          LDA ANFL          ;STARTADR.
-         STA PUFFER+17     
+         STA (CBUF),Y      
+         INY               
          LDA ANFH          
-         STA PUFFER+18     
+         STA (CBUF),Y      
+         INY               
          SEC               ;LAENGE
          LDA ENDL          
          SBC ANFL          
-         STA PUFFER+19     
+         STA (CBUF),Y      
+         INY               
          LDA ENDH          
          SBC ANFH          
-         STA PUFFER+20     
+         STA (CBUF),Y      
+         INY               
          LDA #0            
-         STA PUFFER+21     
-         STA PUFFER+22     
-         STA PUFFER+23     
-         STA PUFFER+24     
+STS1     STA (CBUF),Y      
+         INY               
+         CPY #25           
+         BCC STS1          
          STA CNTBH         ;TIMERWERT
-         LDA #<(PUFFER)    
+         LDA CBUF          
          STA POINTL        
-         LDA #>(PUFFER)    
-         STA POINTH        
-         STA POENH         
-         LDA #$55          ;PUFFERENDE
+         LDX CBUF+1        
+         STX POINTH        
+         CLC               
+         ADC #$19          ;PUFFERLAENGE
          STA POENL         
+         BCC STS11         
+         INX               
+STS11    STX POENH         
          LDA #LSL1         
          STA TIM1          
          LDA #LSL0         ;TIMERWERTE
@@ -691,17 +800,17 @@ SV2      JSR SNAME         ;NAMEN PRUEFEN
          JSR WRITE         ;SCHREIBEN
          JSR DELAY         
          BIT SECA          ;BAUDRATE
-         BPL SV3           
+         BPL STS2          
          LDA #HSL1         ;7200
          STA TIM1          
          LDA #HSL0         
          STA TIM0          
          STA CNTBL         ;TIMER SETZEN
-SV3      LDA ANFL          ;BASIC START
+STS2     LDA ANFL          ;START
          STA POINTL        
          LDA ANFH          
          STA POINTH        
-         LDA ENDL          ;BASIC ENDE
+         LDA ENDL          ;ENDE
          STA POENL         
          LDA ENDH          
          STA POENH         
@@ -709,25 +818,57 @@ SV3      LDA ANFL          ;BASIC START
          JSR WRITE         ;SCHREIBEN
          JMP ENDSR         
 ;*****************************
+;* SETUP SAVE/LOAD VORBEREITEN
+;*****************************
+;
+SETUP    SEI               
+         LDA NMIV          
+         STA NMIT          
+         LDA NMIV+1        
+         STA NMIT+1        
+         LDA #<(BRKSR)     
+         STA NMIV          
+         LDA #>(BRKSR)     ;NMI-VEKTOR
+         STA NMIV+1        ;SETZEN
+         LDA IRQV          
+         STA IRQT          
+         LDA IRQV+1        
+         STA IRQT+1        
+         LDA #<(RDDATA)    ;BYTELESE
+         STA IRQV          
+         LDA #>(RDDATA)    ;ROUTINE
+         STA IRQV+1        
+         LDA #$10          ;AUF BANDTASTE
+SU2      BIT CPORT         ;WARTEN
+         BNE SU2           
+         BIT CPORT         ;ENT-
+         BNE SU2           ;PRELLEN
+         LDA CPORT         
+         AND #$1F          ;MOTOR
+         STA CPORT         ;EIN
+         LDA VICRG         ;SCREEN
+         AND #$EF          ;DISABLE
+         STA VICRG         
+         RTS               
+;*****************************
 ;* SUPERTAPE EINSPRUNG
 ;*****************************
 ;
-BEGIN    LDA #<(LOAD)      ;LOAD
+BEGIN    LDA $330          
+         STA BSLOD         
+         LDA #<(LOAD)      ;LOAD
          STA $330          ;VEKTOR
+         LDA $331          
+         STA BSLOD+1       
          LDA #>(LOAD)      
          STA $331          
+         LDA $332          
+         STA BSSAV         
          LDA #<(SAVE)      ;SAVE
          STA $332          ;VEKTOR
+         LDA $333          
+         STA BSSAV+1       
          LDA #>(SAVE)      
          STA $333          
          LDY #0            
-BE1      LDA BESTM,Y       
-         INY               
-         JSR BSOUT         
-         CMP #0            
-         BNE BE1           
-         RTS               
-BESTM    .BY $93,$0D       
-         .TX "      *** SUPERTAPE"
-         .TX "  AKTIVIERT ***"
-         .BY $0D,$0D,0     
+         JMP MSG           
