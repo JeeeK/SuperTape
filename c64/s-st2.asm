@@ -86,7 +86,7 @@ TEMPY    ... RMB(1)        ;Y TEMPORAER
 .EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-.BA $C949
+.BA $C947
 NMIT     .WO 0             
 IRQT     .WO 0             
 STKT     .BY 0             
@@ -472,9 +472,7 @@ LO8      CMP #4            ;VERIFY-ERROR?
          LDA STATUS        
          ORA #$10          
          STA STATUS        
-         JSR SVEXIT        
-         SEC               
-         RTS               
+         JMP SVEXIT        
 LO81     JSR SVEXIT        
          LDA #$1D          
          SEC               
@@ -484,9 +482,11 @@ LOEXIT   CLC
          LDY ENDH          
          RTS               
 LO9      JSR SVEXIT        
-         LDY #12           ;BASIC
+         LDA TEMPA         ;VERIFY?
+         BNE LOEXIT        
+         LDY #13           ;BASIC
 LO10     LDA (CBUF),Y      ;AUTOSTART
-         CMP LOAUTO-12,Y   
+         CMP LOAUTO-13,Y   
          BNE LO111         
          INY               
          CPY #15           
@@ -497,9 +497,9 @@ LO11     LDA LORUN-1,Y
          STA TPUF-1,Y      
          DEY               ;TASTATURPUFFER
          BNE LO11          
-LO111    LDY #12           ;M/C
+LO111    LDY #13           ;M/C
 LO12     LDA (CBUF),Y      ;AUTOSTART
-         CMP LOCOM-12,Y    
+         CMP LOCOM-13,Y    
          BNE LOEXIT        
          INY               
          CPY #15           
@@ -608,8 +608,8 @@ OUT1     LDA (CBUF),Y
 ;
 WRTA     STA CHAR          ;LOW NIBBLE
 WRTB     LDY #4            ;HIGH NIBBLE
-         LDA TIM0          
-WBY1     LSR CHAR          
+WBY1     LDA TIM0          
+         LSR CHAR          
          BCC WBY2          ; '0' OD. '1'
          LDA TIM1          ;ZEIT F. '1'
 WBY2     STA CNTBL         

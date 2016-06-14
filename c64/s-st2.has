@@ -1,4 +1,4 @@
-;<s-st2 17.prg> ==1FD8==
+;<s-st2 18.prg> ==1FD8==
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -87,7 +87,7 @@
   264 .EQ STROUT  = $AB1E ;STR.OUT
   266 ;
   268 ;
-  270 .BA $C949
+  270 .BA $C947
   500 NMIT     .WO 0             
   502 IRQT     .WO 0             
   504 STKT     .BY 0             
@@ -473,9 +473,7 @@
  6180          LDA STATUS        
  6181          ORA #$10          
  6182          STA STATUS        
- 6183          JSR SVEXIT        
- 6184          SEC               
- 6185          RTS               
+ 6183          JMP SVEXIT        
  6196 LO81     JSR SVEXIT        
  6197          LDA #$1D          
  6198          SEC               
@@ -485,38 +483,40 @@
  6202          LDY ENDH          
  6204          RTS               
  6205 LO9      JSR SVEXIT        
- 6206          LDY #12           ;BASIC
- 6207 LO10     LDA (CBUF),Y      ;AUTOSTART
- 6208          CMP LOAUTO-12,Y   
- 6209          BNE LO111         
- 6210          INY               
- 6211          CPY #15           
- 6212          BNE LO10          
- 6213          LDY #5            
- 6214          STY PUFLEN        
- 6215 LO11     LDA LORUN-1,Y     
- 6216          STA TPUF-1,Y      
- 6217          DEY               ;TASTATURPUFFER
- 6218          BNE LO11          
- 6219 LO111    LDY #12           ;M/C
- 6220 LO12     LDA (CBUF),Y      ;AUTOSTART
- 6221          CMP LOCOM-12,Y    
- 6222          BNE LOEXIT        
- 6223          INY               
- 6224          CPY #15           
- 6225          BNE LO12          
- 6226          LDY #17           
- 6227          LDA (CBUF),Y      ;ANF.ADR.
- 6228          STA POINTL        ;COM-FILE
- 6229          INY               ;STARTEN
- 6230          LDA (CBUF),Y      
- 6231          STA POINTH        
- 6232          JSR LOEXIT        
- 6233          JMP (POINTL)      
- 6234 LOAUTO   .TX "AUT"         
- 6235 LORUN    .TX "RUN:"        
- 6236          .BY $0D           
- 6237 LOCOM    .TX "COM"         
+ 6206          LDA TEMPA         ;VERIFY?
+ 6207          BNE LOEXIT        
+ 6220          LDY #13           ;BASIC
+ 6221 LO10     LDA (CBUF),Y      ;AUTOSTART
+ 6222          CMP LOAUTO-13,Y   
+ 6223          BNE LO111         
+ 6224          INY               
+ 6225          CPY #15           
+ 6226          BNE LO10          
+ 6227          LDY #5            
+ 6228          STY PUFLEN        
+ 6229 LO11     LDA LORUN-1,Y     
+ 6230          STA TPUF-1,Y      
+ 6231          DEY               ;TASTATURPUFFER
+ 6232          BNE LO11          
+ 6233 LO111    LDY #13           ;M/C
+ 6234 LO12     LDA (CBUF),Y      ;AUTOSTART
+ 6235          CMP LOCOM-13,Y    
+ 6236          BNE LOEXIT        
+ 6237          INY               
+ 6238          CPY #15           
+ 6239          BNE LO12          
+ 6240          LDY #17           
+ 6241          LDA (CBUF),Y      ;ANF.ADR.
+ 6242          STA POINTL        ;COM-FILE
+ 6243          INY               ;STARTEN
+ 6244          LDA (CBUF),Y      
+ 6245          STA POINTH        
+ 6246          JSR LOEXIT        
+ 6247          JMP (POINTL)      
+ 6248 LOAUTO   .TX "AUT"         
+ 6249 LORUN    .TX "RUN:"        
+ 6250          .BY $0D           
+ 6251 LOCOM    .TX "COM"         
  6500 ;*****************************
  6501 ;* LOAD POSITIONIER-ROUTINE
  6502 ;*****************************
@@ -609,8 +609,8 @@
  7103 ;
  7110 WRTA     STA CHAR          ;LOW NIBBLE
  7112 WRTB     LDY #4            ;HIGH NIBBLE
- 7114          LDA TIM0          
- 7115 WBY1     LSR CHAR          
+ 7114 WBY1     LDA TIM0          
+ 7115          LSR CHAR          
  7116          BCC WBY2          ; '0' OD. '1'
  7118          LDA TIM1          ;ZEIT F. '1'
  7120 WBY2     STA CNTBL         
