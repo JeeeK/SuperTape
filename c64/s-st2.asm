@@ -86,7 +86,7 @@ TEMPY    ... RMB(1)        ;Y TEMPORAER
 .EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-.BA $C947
+.BA $C945
 NMIT     .WO 0             
 IRQT     .WO 0             
 STKT     .BY 0             
@@ -816,6 +816,8 @@ STS2     LDA ANFL          ;START
          STA POENH         
          LDA #$C5          ;DATENBLOCK
          JSR WRITE         ;SCHREIBEN
+         CLC               
+         CLI               
          JMP ENDSR         
 ;*****************************
 ;* SETUP SAVE/LOAD VORBEREITEN

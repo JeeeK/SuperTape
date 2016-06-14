@@ -1,4 +1,4 @@
-;<s-st2 18.prg> ==1FD8==
+;<s-st2 19.prg> ==1FD8==
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -87,7 +87,7 @@
   264 .EQ STROUT  = $AB1E ;STR.OUT
   266 ;
   268 ;
-  270 .BA $C947
+  270 .BA $C945
   500 NMIT     .WO 0             
   502 IRQT     .WO 0             
   504 STKT     .BY 0             
@@ -817,6 +817,8 @@
 10755          STA POENH         
 10760          LDA #$C5          ;DATENBLOCK
 10765          JSR WRITE         ;SCHREIBEN
+10766          CLC               
+10767          CLI               
 10770          JMP ENDSR         
 10800 ;*****************************
 10801 ;* SETUP SAVE/LOAD VORBEREITEN
