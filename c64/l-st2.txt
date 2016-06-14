@@ -1,0 +1,925 @@
+
+
+;l-st2-25 
+
+  hypra-ass  assemblerlisting:
+
+               3    -.li 3,8,3,"l-st2-25,p,w"
+  ;********************************
+  ;*                              *
+  ;*   s u p e r t a p e   c 6 4  *
+  ;*                              *
+  ;*   aus c't 1984, heft 10      *
+  ;*                              *
+  ;*   erstellt 27/5/1990, jk     *
+  ;*                              *
+  ;*   verbessert 6/6/1990 jk     *
+  ;*              10/6/1990 jk    *
+  ;*   ueberarbeitet 28/3/2012 jk *
+  ;*                              *
+  ;*   jk: johann e. klasek       *
+  ;*       j@klasek.at            *
+  ;*                              *
+  ;********************************
+  ;
+  ;makro: reserve memory bytes
+               102  -          .ma rmb(n)
+  ;
+               114  -.eq cport   = $01    ; mp-port
+               118  -.eq lospdl  = $46    ; timer
+               120  -.eq lospdh  = $81    ;  3600 bd
+               122  -.eq locmp   = $73
+               124  -.eq hispdl  = $9c    ; timer
+               126  -.eq hispdh  = $80    ;  7200 bd
+               128  -.eq hicmp   = $bb
+               130  -.eq tlim    = $57
+               132  -.eq nlen    = $b7  ; filenamelen
+               134  -.eq puflen  = $c6  ; tast.puffer
+               136  -.eq lsl0    = $78  ; timer schreiben
+               138  -.eq lsl1    = $ff
+               140  -.eq hsl0    = $34
+               142  -.eq hsl1    = $78
+               144  -          .ba tlim+1     ; zeichen
+               146  -char      ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               148  -sflag     ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               150  -buff      ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               152  -wtflag    ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               154  -opflag    ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               156  -chksml    ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               158  -chksmh    ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               160  -pointl    ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               162  -pointh    ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+               164  -poenl     ... rmb(1)     ;endpointer
+               103  -here      .ba here+n
+               104  -          .rt 
+               166  -poenh     ... rmb(1)
+               103  -here      .ba here+n
+               104  -          .rt 
+  ;
+               170  -          .ba $93        ;temporaerer akku
+               172  -tempa     ... rmb(1)     ;load/verify flag, bit7
+               103  -here      .ba here+n
+               104  -          .rt 
+               173  -tmpx      ... rmb(1)     ;pruefsumme: temp. x-reg
+               103  -here      .ba here+n
+               104  -          .rt 
+  ;
+               180  -.eq status  = $90
+               182  -.eq dn      = $ba ;dev.num.
+               184  -.eq inbuf   = $bb ;zeiger filename
+               186  -.eq seca    = $b9 ;sek.adr.
+               188  -.eq basal   = $2b ;basicstart
+               190  -.eq basah   = basal+1
+               192  -.eq anfl    = $c1 ;anf.adr.
+               194  -.eq anfh    = anfl+1
+               196  -.eq lanf    = $c3
+               197  -.eq endl    = $ae ;end-adr.
+               198  -.eq endh    = endl+1
+               200  -.eq mflag   = $c0  ;motorflag
+               202  -.eq stw     = $d9 ;timer start
+               203  -.eq cbuf    = $f9 ;pointer auf kassettenpuffer
+               204  -.eq tim0    = $fb ;timer wert '0'
+               206  -.eq tim1    = tim0+1 ; -"-    '1'
+               208  -.eq tpuf    = $277 ;tast.puffer
+  ;
+               214  -.eq irqv    = $314 ;irq vektor
+               216  -.eq nmiv    = $318 ;nmi vektor
+               218  -.eq puffer  = $33c ;kassettenpuffer
+               220  -.eq cntal   = $dc04 ;timer low (load)
+               222  -.eq cntah   = cntal+1;     high
+               224  -.eq cntbl   = $dd04 ;timer low (save)
+               226  -.eq cntbh   = cntbl+1;     high
+               228  -.eq icr     = $dc0d ;int.reg.
+               230  -.eq icrb    = $dd0d ;int.reg.
+               232  -.eq cra     = icr+1 ;timer start
+               234  -.eq tst     = icrb+1 ;timer start
+               236  -.eq vicrg   = $d011
+  ;
+               242  -.eq break   = $a381 ;break-text
+               244  -.eq ciainit = $fda3
+               246  -.eq errm    = $a369 ;meldung error
+               254  -.eq bsmsg   = $f12f ;message out
+               256  -.eq lvm     = $f5d2 ;loading/ver.
+               262  -.eq bsout   = $ffd2 ;char.out
+               264  -.eq strout  = $ab1e ;str.out
+  ;
+  ;
+               270  -.ba $ca08
+               500  -nmit      .wo 0
+               502  -irqt      .wo 0
+               504  -stkt      .by 0
+               506  -bssav     .wo 0
+               508  -bslod     .wo 0
+  ;*****************************
+  ;* delay-hochlaufzeit
+  ;*****************************
+  ;
+  ca11 a200   :1108 -delay     ldx #0
+  ca13 a000   :1110 -          ldy #0
+  ca15 ca     :1112 -del1      dex 
+  ca16 d0fd   :1114 -          bne del1
+  ca18 88     :1116 -          dey 
+  ca19 d0fa   :1118 -          bne del1
+  ca1b 60     :1120 -          rts 
+  ;*****************************
+  ;* fehlermeldung ausgeben
+  ;*****************************
+  ;
+  ca1c 249d   :2510 -msg       bit $9d        ;direktmodus flag
+  ca1e 100d   :2515 -          bpl msgexit
+  ca20 b92fca :2520 -msg1      lda msgtxt,y
+  ca23 08     :2525 -          php 
+  ca24 297f   :2530 -          and #$7f       ;bit 7 weg
+  ca26 20d2ff :2535 -          jsr bsout      ;ausgeben
+  ca29 c8     :2540 -          iny 
+  ca2a 28     :2545 -          plp 
+  ca2b 10f3   :2550 -          bpl msg1       ;messageende?
+  ca2d 18     :2555 -msgexit   clc 
+  ca2e 60     :2560 -          rts 
+  ;
+               2600 -msgtxt    .by $0d,$0d
+               2605 -          .tx " **** supertape v2.0  aktiviert ****"
+               2610 -          .by $0d,$8d
+               2615 -msgppt    .by $0d
+               2620 -          .tx "press play on tap"
+               2625 -          .by $c5        ; 'e'+$80
+               2630 -msgpprt   .by $0d
+               2635 -          .tx "press record & play on tap"
+               2640 -          .by $c5        ; 'e'+$80
+               2645 -msgifn    .by $0d
+               2650 -          .tx "? invalid filename"
+               2655 -          .by $8d
+               2660 -msgbpb    .by $0d
+               2665 -          .tx "? bad para-block"
+               2670 -          .by $8d
+               2675 -msgbcs    .by $0d
+               2680 -          .tx "? bad checksum"
+               2685 -          .by $8d
+               2705 -msgse     .by $0d
+               2710 -          .tx "? bad sync"
+               2715 -          .by $8d
+  ;*****************************
+  ;* irq-leseroutine
+  ;*
+  ;* wertet fallende flanken
+  ;* aus, (zeitl.) abstaende
+  ;* lassen auf 0 und 1 signal
+  ;* schliessen.
+  ;*****************************
+  ;
+  cac8 ad0ddc :3111 -rddata    lda icr        ;irq reset
+  cacb a9d9   :3114 -          lda #stw       ;timer startwort
+  cacd ae04dc :3117 -          ldx cntal
+  cad0 ac05dc :3120 -          ldy cntah
+  cad3 8d0edc :3123 -          sta cra        ;timer starten
+  cad6 302a   :3126 -          bmi rdbit0     ;t=t2?
+  cad8 38     :3129 -          sec 
+  cad9 6658   :3132 -          ror char
+  cadb 2459   :3135 -          bit sflag      ;synchr.?
+  cadd 300c   :3138 -          bmi rd1
+  cadf 900a   :3141 -          bcc rd1        ;alle bits?
+  cae1 a558   :3144 -          lda char
+  cae3 855a   :3147 -          sta buff
+  cae5 a980   :3150 -          lda #$80
+  cae7 8558   :3153 -          sta char       ;endemarkierung
+  cae9 855b   :3156 -          sta wtflag     ;byte da
+  caeb c079   :3159 -rd1       cpy #$79
+  caed 9004   :3162 -          bcc rd2        ;t=t3
+  caef e457   :3165 -          cpx tlim
+  caf1 b007   :3168 -          bcs rd3
+  caf3 a900   :3171 -rd2       lda #0         ;t1
+  caf5 855c   :3174 -          sta opflag     ;out-of-phase flag
+  caf7 38     :3177 -          sec 
+  caf8 b009   :3180 -          bcs rdbit
+  cafa a55c   :3183 -rd3       lda opflag     ;phasenverschiebung merken
+  cafc 4980   :3186 -          eor #$80
+  cafe 855c   :3189 -          sta opflag
+  cb00 1013   :3195 -          bpl rd4        ;exit
+  cb02 18     :3198 -rdbit0    clc 
+  cb03 6658   :3201 -rdbit     ror char
+  cb05 2459   :3204 -          bit sflag
+  cb07 300c   :3207 -          bmi rd4        ;sychr.
+  cb09 900a   :3210 -          bcc rd4        ;alles gelesen?
+  cb0b a558   :3213 -          lda char
+  cb0d 855a   :3216 -          sta buff
+  cb0f a980   :3219 -          lda #$80
+  cb11 8558   :3222 -          sta char       ;endemarkierung
+  cb13 855b   :3225 -          sta wtflag     ;byte da
+  cb15 68     :3228 -rd4       pla 
+  cb16 a8     :3231 -          tay 
+  cb17 68     :3234 -          pla 
+  cb18 aa     :3237 -          tax 
+  cb19 68     :3240 -          pla 
+  cb1a 40     :3243 -          rti 
+  ;
+  ;*****************************
+  ;* byte lesen
+  ;*****************************
+  ;
+  ; y-reg bit7 muss immer 0 sein!
+  cb1b 245b   :3264 -rdbyte    bit wtflag
+  cb1d 10fc   :3267 -          bpl rdbyte     ;warten
+  cb1f 845b   :3270 -          sty wtflag     ;flag loeschen
+  cb21 a55a   :3273 -          lda buff
+  cb23 60     :3276 -          rts 
+  ;
+  ;*****************************
+  ;* auf bytetakt synchronisieren
+  ;*****************************
+  ;
+  cb24 a080   :3294 -insyn     ldy #$80       ;bitweise
+  cb26 8459   :3297 -          sty sflag      ;einlesen
+  cb28 a558   :3300 -ins1      lda char
+  cb2a c916   :3303 -          cmp #$16       ;syncbyte
+  cb2c d0fa   :3306 -          bne ins1
+  cb2e 8458   :3309 -          sty char
+  cb30 a00a   :3312 -          ldy #10        ;noch 10 syncs
+  cb32 8459   :3315 -          sty sflag      ;byteweise
+  cb34 845b   :3318 -          sty wtflag     ;flag loeschen, bit7
+  cb36 201bcb :3321 -ins2      jsr rdbyte     ;byte einlesen
+  cb39 c916   :3333 -          cmp #$16       ;noch immer sync
+  cb3b d0e7   :3336 -          bne insyn      ;von vorn
+  cb3d 88     :3339 -          dey 
+  cb3e d0f6   :3342 -          bne ins2
+  cb40 201bcb :3345 -ins3      jsr rdbyte
+  cb43 c916   :3348 -          cmp #$16       ;alle syncs
+  cb45 f0f9   :3351 -          beq ins3       ;lesen
+  cb47 60     :3354 -          rts 
+  ;
+  ;*****************************
+  ;* supertape verlassen
+  ;*****************************
+  ;
+  cb48 48     :3372 -endsr     pha 
+  cb49 08     :3373 -          php 
+  cb4a 78     :3375 -          sei 
+  cb4b ad11d0 :3378 -          lda vicrg
+  cb4e 0910   :3381 -          ora #$10       ;screen enable
+  cb50 8d11d0 :3384 -          sta vicrg
+  cb53 a501   :3387 -          lda cport
+  cb55 0920   :3390 -          ora #$20       ;motor aus
+  cb57 8501   :3393 -          sta cport
+  cb59 a97f   :3396 -          lda #$7f       ;int.contr.
+  cb5b 8d0ddc :3399 -          sta icr        ;reg.: alle interr.
+  cb5e 8d0ddd :3402 -          sta icrb       ;quellen loeschen
+  cb61 a908   :3405 -          lda #$08       ;one shot
+  cb63 8d0edc :3408 -          sta cra
+  cb66 8d0edd :3411 -          sta tst
+  cb69 ad0aca :3414 -          lda irqt       ;interr.
+  cb6c 8d1403 :3417 -          sta irqv
+  cb6f ad0bca :3420 -          lda irqt+1     ;vektoren
+  cb72 8d1503 :3423 -          sta irqv+1     ;wieder
+  cb75 ad08ca :3426 -          lda nmit
+  cb78 8d1803 :3429 -          sta nmiv       ;herstellen
+  cb7b ad09ca :3432 -          lda nmit+1
+  cb7e 8d1903 :3435 -          sta nmiv+1
+  cb81 28     :3438 -          plp 
+  cb82 68     :3439 -          pla 
+  cb83 60     :3441 -          rts 
+  ;*****************************
+  ;* byte lesen mit pruefsumme
+  ;*****************************
+  ;
+  ; y-reg bit7 muss immer 0 sein!
+  ;
+  cb84 245b   :3510 -rdbytecs  bit wtflag
+  cb86 10fc   :3512 -          bpl rdbytecs   ;warten
+  cb88 845b   :3514 -          sty wtflag     ;flag loeschen
+  cb8a a55a   :3516 -          lda buff
+  cb8c 4a     :3520 -calccs    lsr            ;pruefsumme
+  cb8d 4a     :3521 -          lsr            ;high nibble
+  cb8e 4a     :3522 -          lsr 
+  cb8f 4a     :3523 -          lsr            ;bit3 in c
+  cb90 8594   :3525 -          sta tmpx
+  cb92 a55a   :3530 -          lda buff
+  cb94 2907   :3531 -          and #07        ;nur noch bit0-2
+  cb96 aa     :3535 -          tax 
+  cb97 bdaacb :3540 -          lda bctab,x    ;bitcount bit0-2
+  cb9a a694   :3541 -          ldx tmpx       ;bitcount bit4-7
+  cb9c 7daacb :3542 -          adc bctab,x    ;in c ist bit3
+  cb9f 655d   :3545 -          adc chksml     ;+pruefsumme
+  cba1 855d   :3550 -          sta chksml
+  cba3 9002   :3560 -          bcc ccsexit
+  cba5 e65e   :3565 -          inc chksmh
+  cba7 a55a   :3570 -ccsexit   lda buff
+  cba9 60     :3575 -          rts 
+  ; tabelle wert->bitanzahl
+               3580 -bctab     .by 0,1,1,2,1,2,2,3; nibblewerte 0-7
+               3585 -          .by 1,2,2,3,2,3,3,4; nibblewerte 8-15
+  ;
+  ;*****************************
+  ;* supertape abbruch
+  ;*****************************
+  ;
+  cbba 2048cb :3610 -brksr     jsr endsr
+  cbbd ae0cca :3612 -          ldx stkt       ;stack am beginn
+  cbc0 9a     :3614 -          txs 
+  cbc1 58     :3616 -          cli 
+  cbc2 a900   :3617 -          lda #0         ;fehlercode break
+  cbc4 38     :3618 -          sec            ;fehler
+  cbc5 60     :3619 -          rts 
+  ;
+  ;*****************************
+  ;* namenspruefung load
+  ;*****************************
+  ;
+  cbc6 a5b7   :4104 -lname     lda nlen
+  cbc8 c911   :4105 -          cmp #17
+  cbca b021   :4106 -          bcs ln7        ;zu lang
+  cbcc a000   :4107 -          ldy #0
+  cbce a200   :4109 -          ldx #0         ;fikt. zielpuffer
+  cbd0 f016   :4110 -          beq lnchk      ;immer..
+  cbd2 b1bb   :4113 -ln1       lda (inbuf),y  ;zeichen fuer zeichen ...
+  cbd4 c92e   :4114 -          cmp #"."
+  cbd6 d00a   :4115 -          bne ln5
+  cbd8 c00d   :4116 -          cpy #13        ;im ext-bereich?
+  cbda b011   :4117 -          bcs ln7        ;namensteil zu lang - fehler!
+  cbdc e00d   :4118 -          cpx #13
+  cbde b00d   :4119 -          bcs ln7        ;2. punkt - fehler!
+  cbe0 a20c   :4120 -          ldx #12        ;punktpos., zum typ
+  cbe2 e8     :4122 -ln5       inx 
+  cbe3 e010   :4123 -          cpx #16        ;fikt.puffer ende
+  cbe5 f005   :4124 -          beq ln6        ;ende, ok
+  cbe7 c8     :4125 -          iny 
+  cbe8 c4b7   :4126 -lnchk     cpy nlen       ;input ende?
+  cbea 90e6   :4127 -          bcc ln1        ;naechstes
+  cbec 18     :4130 -ln6       clc            ;ok
+  cbed 60     :4131 -ln7       rts 
+  ;
+  ;*****************************
+  ;* datenblock laden
+  ;*****************************
+  ;
+  cbee 78     :5110 -stl       sei 
+  cbef ba     :5115 -          tsx            ;stackpointer
+  cbf0 8e0cca :5120 -          stx stkt       ;abspeichern
+  cbf3 2084cf :5125 -          jsr setup      ;leseroutine aufsetzen
+  cbf6 a011   :5202 -          ldy #17        ;startadr.
+  cbf8 b1f9   :5204 -          lda (cbuf),y   ;von band:
+  cbfa c8     :5205 -          iny 
+  cbfb 855f   :5206 -          sta pointl     ;absolut
+  cbfd b1f9   :5208 -          lda (cbuf),y   ;load
+  cbff c8     :5209 -          iny 
+  cc00 8560   :5210 -          sta pointh
+  cc02 a5b9   :5212 -          lda seca       ;sek.adr.?
+  cc04 d008   :5214 -          bne stl1
+  cc06 a5c3   :5215 -          lda lanf
+  cc08 855f   :5216 -          sta pointl     ;an gegebene
+  cc0a a5c4   :5218 -          lda lanf+1     ;adr.
+  cc0c 8560   :5220 -          sta pointh
+  cc0e 18     :5222 -stl1      clc 
+  cc0f a55f   :5224 -          lda pointl     ;laenge
+  cc11 71f9   :5226 -          adc (cbuf),y   ;+start
+  cc13 85ae   :5228 -          sta endl
+  cc15 c8     :5229 -          iny 
+  cc16 a560   :5230 -          lda pointh
+  cc18 71f9   :5232 -          adc (cbuf),y
+  cc1a 85af   :5234 -          sta endh       ;=endadr
+  cc1c a010   :5235 -          ldy #16
+  cc1e b1f9   :5236 -          lda (cbuf),y   ;baudrate
+  cc20 2074cc :5238 -          jsr settimer   ;timerinterrupt
+  cc23 58     :5250 -          cli 
+  cc24 2024cb :5252 -          jsr insyn
+  cc27 c9c5   :5254 -          cmp #$c5       ;start
+  cc29 d035   :5256 -          bne stlerr3
+  cc2b 845d   :5258 -          sty chksml     ;pruefsumme
+  cc2d 845e   :5260 -          sty chksmh     ;loeschen
+  ;
+  cc2f 2084cb :5262 -stlread   jsr rdbytecs
+  cc32 2493   :5270 -          bit tempa      ;verify?
+  cc34 1005   :5272 -          bpl stlnover
+  cc36 d15f   :5274 -          cmp (pointl),y
+  cc38 d029   :5275 -          bne stlerr4    ;error
+               5276 -          .by $2c
+  cc3b 915f   :5277 -stlnover  sta (pointl),y
+  ;
+  cc3d e65f   :5292 -          inc pointl     ;pointer
+  cc3f d002   :5294 -          bne stl6       ;erhoehen
+  cc41 e660   :5296 -          inc pointh
+  ;
+  cc43 a55f   :5298 -stl6      lda pointl
+  cc45 c5ae   :5300 -          cmp endl       ;ende?
+  cc47 d0e6   :5302 -          bne stlread    ;weiter lesen
+  cc49 a560   :5304 -          lda pointh
+  cc4b c5af   :5306 -          cmp endh
+  cc4d d0e0   :5308 -          bne stlread
+  ;
+  cc4f 201bcb :5310 -          jsr rdbyte     ;pruefsumme
+  cc52 c55d   :5318 -          cmp chksml     ;lesen
+  cc54 d007   :5320 -          bne stlerr2
+  cc56 201bcb :5322 -          jsr rdbyte     ;und testen
+  cc59 c55e   :5330 -          cmp chksmh
+  cc5b f00a   :5332 -          beq stlexit
+  cc5d a902   :5338 -stlerr2   lda #2         ;bad checksum
+               5340 -          .by $2c
+  cc60 a903   :5342 -stlerr3   lda #3         ;sync error
+               5344 -          .by $2c
+  cc63 a904   :5346 -stlerr4   lda #4         ;verify error
+  cc65 38     :5348 -          sec 
+               5349 -          .by $24
+  cc67 18     :5350 -stlexit   clc            ;basic
+  cc68 a65f   :5351 -          ldx pointl     ;ende
+  cc6a 86ae   :5352 -          stx endl       ;setzen!
+  cc6c a660   :5353 -          ldx pointh
+  cc6e 86af   :5354 -          stx endh
+  cc70 58     :5355 -          cli 
+  cc71 4c48cb :5356 -          jmp endsr
+  ;
+  ;*****************************
+  ;* timer setzen (baudrate)
+  ;*****************************
+  ;
+  cc74 1008   :5508 -settimer  bpl set1
+  cc76 a29c   :5510 -          ldx #hispdl    ;7200
+  cc78 a080   :5514 -          ldy #hispdh    ;baud
+  cc7a a9bb   :5518 -          lda #hicmp
+  cc7c d006   :5522 -          bne set2
+  cc7e a246   :5524 -set1      ldx #lospdl    ;3600
+  cc80 a081   :5526 -          ldy #lospdh    ;baud
+  cc82 a973   :5528 -          lda #locmp
+  cc84 8e04dc :5540 -set2      stx cntal      ;timer
+  cc87 8c05dc :5542 -          sty cntah      ;wert
+  cc8a 8557   :5544 -          sta tlim       ;zeitlimit f.t3
+  cc8c a97f   :5546 -          lda #$7f       ;alle interr.quellen
+  cc8e 8d0ddc :5548 -          sta icr        ;loeschen
+  cc91 a990   :5550 -          lda #$90       ;interr. bei
+  cc93 8d0ddc :5552 -          sta icr        ;fallende flanke von
+  cc96 60     :5554 -          rts            ;flag (cass. in)
+  ;*****************************
+  ;* load routine
+  ;*****************************
+  ;
+  cc97 4a     :6106 -load      lsr            ;bit0->c
+  cc98 6a     :6107 -          ror            ;c->bit7
+  cc99 8593   :6108 -          sta tempa      ;verify flag
+  cc9b a900   :6110 -          lda #0
+  cc9d 8590   :6111 -          sta status
+  cc9f a5ba   :6112 -          lda dn         ;device
+  cca1 c907   :6113 -          cmp #7         ;supertape
+  cca3 f007   :6114 -          beq lo1
+  cca5 a593   :6115 -          lda tempa      ;bit7->
+  cca7 0a     :6116 -          asl 
+  cca8 2a     :6117 -          rol            ;bit0
+  cca9 6c0fca :6118 -          jmp (bslod)    ;original
+  ccac a028   :6119 -lo1       ldy #(msgppt-msgtxt)
+  ccae 201cca :6120 -          jsr msg        ;press play...
+  ccb1 a901   :6121 -          lda #1
+  ccb3 85c0   :6122 -          sta mflag
+  ccb5 a93c   :6123 -          lda #<(puffer) ;kassettenpuffer
+  ccb7 85f9   :6124 -          sta cbuf       ;setzen
+  ccb9 a903   :6125 -          lda #>(puffer)
+  ccbb 85fa   :6126 -          sta cbuf+1
+  ccbd 207dcd :6127 -lonext    jsr stp        ;file suchen
+  ccc0 9019   :6128 -          bcc lo4
+  ccc2 aa     :6129 -          tax            ;break?
+  ccc3 f03c   :6130 -          beq lobrk
+  ccc5 c902   :6131 -          cmp #02        ;para.block
+  ccc7 d00a   :6132 -          bne lo31       ;fehlerhaft?
+  ccc9 a06b   :6133 -          ldy #(msgbpb-msgtxt)
+  cccb 201cca :6134 -lo32      jsr msg
+  ccce a900   :6135 -          lda #0
+  ccd0 48     :6136 -          pha 
+  ccd1 9011   :6137 -          bcc lodisp
+  ccd3 c901   :6138 -lo31      cmp #01        ;filenamensyntax falsch?
+  ccd5 d0e6   :6139 -          bne lonext     ;sonst weiter suchen
+  ccd7 a057   :6140 -          ldy #(msgifn-msgtxt)
+  ccd9 d02f   :6141 -          bne lo61
+  ccdb 48     :6150 -lo4       pha            ;fehlercode
+  ccdc a063   :6151 -          ldy #$63       ;'found'
+  ccde 202ff1 :6152 -          jsr bsmsg
+  cce1 20f2cd :6153 -          jsr outnam     ;filename
+  cce4 a90a   :6154 -lodisp    lda #10
+  cce6 855a   :6155 -          sta buff
+  cce8 2011ca :6156 -lo5       jsr delay
+  cceb c65a   :6157 -          dec buff       ;einige sek warten
+  cced d0f9   :6158 -          bne lo5
+  ccef 68     :6159 -          pla 
+  ccf0 aa     :6160 -          tax 
+  ccf1 f0ca   :6161 -          beq lonext     ;file passt nicht
+  ccf3 20d2f5 :6162 -          jsr lvm        ;'loading/verifying'
+  ccf6 20f2cd :6163 -          jsr outnam     ;filename
+  ccf9 20eecb :6164 -          jsr stl        ;load data
+  ccfc 9033   :6165 -          bcc loauto
+  ccfe aa     :6166 -          tax            ;break?
+  ccff d003   :6167 -          bne lo6
+  cd01 4ce1ce :6168 -lobrk     jmp svbreak
+  cd04 c902   :6169 -lo6       cmp #2         ;bad checksum?
+  cd06 d007   :6170 -          bne lo7
+  cd08 a07d   :6171 -          ldy #(msgbcs-msgtxt)
+  cd0a 201cca :6172 -lo61      jsr msg
+  cd0d 9015   :6173 -          bcc lo81
+  cd0f c903   :6174 -lo7       cmp #3         ;sync-error?
+  cd11 d004   :6175 -          bne lo8
+  cd13 a08d   :6176 -          ldy #(msgse-msgtxt)
+  cd15 d0f3   :6177 -          bne lo61
+  cd17 c904   :6178 -lo8       cmp #4         ;verify-error?
+  cd19 d010   :6179 -          bne loexit
+  cd1b a590   :6180 -          lda status
+  cd1d 0910   :6181 -          ora #$10
+  cd1f 8590   :6182 -          sta status
+  cd21 4cedce :6183 -          jmp svexit
+  cd24 20edce :6196 -lo81      jsr svexit
+  cd27 a91d   :6197 -          lda #$1d
+  cd29 38     :6198 -          sec 
+               6199 -          .by $24
+  cd2b 18     :6200 -loexit    clc 
+  cd2c a6ae   :6201 -          ldx endl
+  cd2e a4af   :6202 -          ldy endh
+  cd30 60     :6204 -          rts 
+  cd31 20edce :6205 -loauto    jsr svexit
+  cd34 2493   :6206 -          bit tempa      ;verify?
+  cd36 30f3   :6207 -          bmi loexit
+  cd38 a00d   :6220 -          ldy #13        ;basic
+  cd3a b1f9   :6221 -lo10      lda (cbuf),y   ;autostart
+  cd3c d965cd :6222 -          cmp loaut-13,y
+  cd3f d012   :6223 -          bne lo111
+  cd41 c8     :6224 -          iny 
+  cd42 c00f   :6225 -          cpy #15
+  cd44 d0f4   :6226 -          bne lo10
+  cd46 a005   :6227 -          ldy #5
+  cd48 84c6   :6228 -          sty puflen
+  cd4a b974cd :6229 -lo11      lda lorun-1,y
+  cd4d 997602 :6230 -          sta tpuf-1,y
+  cd50 88     :6231 -          dey            ;tastaturpuffer
+  cd51 d0f7   :6232 -          bne lo11
+  cd53 a00d   :6233 -lo111     ldy #13        ;m/c
+  cd55 b1f9   :6234 -lo12      lda (cbuf),y   ;autostart
+  cd57 d96dcd :6235 -          cmp locom-13,y
+  cd5a d0cf   :6236 -          bne loexit
+  cd5c c8     :6237 -          iny 
+  cd5d c00f   :6238 -          cpy #15
+  cd5f d0f4   :6239 -          bne lo12
+  cd61 a011   :6240 -          ldy #17
+  cd63 b1f9   :6241 -          lda (cbuf),y   ;anf.adr.
+  cd65 855f   :6242 -          sta pointl     ;com-file
+  cd67 c8     :6243 -          iny            ;starten
+  cd68 b1f9   :6244 -          lda (cbuf),y
+  cd6a 8560   :6245 -          sta pointh
+  cd6c 202bcd :6246 -          jsr loexit
+  cd6f 6c5f00 :6247 -          jmp (pointl)
+               6248 -loaut     .tx "aut"
+               6249 -lorun     .tx "run:"
+               6250 -          .by $0d
+               6251 -locom     .tx "com"
+  ;*****************************
+  ;* load positionier-routine
+  ;*****************************
+  ;
+  cd7d 20c6cb :6510 -stp       jsr lname
+  cd80 9003   :6512 -          bcc stpnok
+  cd82 a901   :6514 -          lda #01        ;syntaxfehler
+  cd84 60     :6516 -          rts 
+  cd85 ba     :6518 -stpnok    tsx            ;stackpos.
+  cd86 8e0cca :6520 -          stx stkt       ;merken
+  cd89 2084cf :6522 -          jsr setup
+  cd8c 2011ca :6523 -          jsr delay
+  cd8f a900   :6524 -          lda #0         ;n-flag=0=>3600 baud
+  cd91 2074cc :6580 -          jsr settimer   ;timer setzen
+  cd94 58     :6604 -          cli            ;los gehts
+  cd95 2024cb :6606 -losync    jsr insyn      ;synchronisieren
+  cd98 c92a   :6608 -          cmp #$2a       ;startzeichen?
+  cd9a d0f9   :6610 -          bne losync
+  cd9c 845d   :6612 -          sty chksml     ;pruefsumme
+  cd9e 845e   :6614 -          sty chksmh     ;loeschen
+  cda0 2084cb :6616 -stpread   jsr rdbytecs   ;byte vom band
+  cda3 91f9   :6618 -          sta (cbuf),y   ;ablegen
+  ;
+  cda5 c8     :6642 -          iny 
+  cda6 c019   :6644 -          cpy #$19       ;block ende
+  cda8 90f6   :6646 -          bcc stpread
+  cdaa 201bcb :6655 -          jsr rdbyte
+  cdad c55d   :6656 -          cmp chksml     ;pruefsumme
+  cdaf d02e   :6657 -          bne stpcserr
+  cdb1 201bcb :6658 -          jsr rdbyte     ;ps high
+  cdb4 c55e   :6659 -          cmp chksmh
+  cdb6 d027   :6660 -          bne stpcserr   ;testen
+  cdb8 a000   :6661 -          ldy #0
+  cdba a200   :6662 -          ldx #0
+  cdbc f015   :6663 -          beq stpcheck
+  cdbe b1bb   :6670 -stploop   lda (inbuf),y
+  cdc0 c92e   :6672 -          cmp #"."
+  cdc2 f02a   :6674 -          beq stpdot
+  cdc4 c92a   :6675 -          cmp #"*"
+  cdc6 f01e   :6676 -          beq stpext     ;2. stern?
+  cdc8 c93f   :6677 -          cmp #"?"
+  cdca f005   :6678 -          beq stpnext
+  cdcc dd3c03 :6679 -stpcmp    cmp puffer,x
+  cdcf d009   :6680 -          bne stpcont    ;verschieden!
+  cdd1 e8     :6682 -stpnext   inx 
+  cdd2 c8     :6684 -stpnxtin  iny 
+  cdd3 c4b7   :6686 -stpcheck  cpy nlen       ;inputende?
+  cdd5 d0e7   :6688 -          bne stploop    ;weiter
+  cdd7 a901   :6690 -stpfnd    lda #1         ;gefunden!
+               6692 -          .by $2c        ;skip naechsten befehl
+  cdda a900   :6694 -stpcont   lda #0         ;nicht gefunden,
+  cddc 18     :6695 -          clc            ;naechste datei!
+  cddd 9003   :6696 -          bcc stpexit    ;exit
+  cddf a902   :6698 -stpcserr  lda #2         ;checksum
+  cde1 38     :6700 -          sec            ;error
+  cde2 58     :6702 -stpexit   cli            ;interrupts erlauben
+  cde3 4c48cb :6704 -          jmp endsr      ;ende!
+  cde6 e00d   :6706 -stpext    cpx #13        ;in typ feld (nach punkt)
+  cde8 b0ed   :6708 -          bcs stpfnd     ;ja, gefunden!
+  cdea a20c   :6718 -          ldx #12        ;punktpos.
+  cdec d0e4   :6720 -          bne stpnxtin   ;weiter
+  cdee a20c   :6722 -stpdot    ldx #12        ;punktpos.
+  cdf0 d0da   :6724 -          bne stpcmp     ;immer vergleichen!
+  ;
+  cdf2 a920   :6754 -outnam    lda #" "       ;trennzeichen
+  cdf4 a0ff   :6755 -          ldy #$ff       ; -1
+  cdf6 3002   :6757 -          bmi out2
+  cdf8 b1f9   :6758 -out1      lda (cbuf),y
+  cdfa 20d2ff :6759 -out2      jsr bsout
+  cdfd c8     :6760 -          iny 
+  cdfe c010   :6762 -          cpy #16
+  ce00 90f6   :6764 -          bcc out1
+  ce02 60     :6766 -          rts 
+  ;*****************************
+  ;* write byte
+  ;*****************************
+  ;
+  ce03 8558   :7105 -wrtab     sta char       ;ganzes byte
+  ce05 a008   :7106 -          ldy #8         ;alle 8 bit
+  ce07 d004   :7107 -          bne wby1       ;immer
+  ce09 8558   :7110 -wrta      sta char       ;low nibble
+  ce0b a004   :7112 -wrtb      ldy #4         ;high nibble
+  ce0d a5fb   :7114 -wby1      lda tim0
+  ce0f 4658   :7115 -          lsr char
+  ce11 9002   :7116 -          bcc wby2       ;'0' od. '1'
+  ce13 a5fc   :7118 -          lda tim1       ;zeit f. '1'
+  ce15 8d04dd :7120 -wby2      sta cntbl
+  ce18 a901   :7122 -          lda #$01
+  ce1a 2c0ddd :7124 -wby3      bit icrb       ;time out
+  ce1d f0fb   :7126 -          beq wby3
+  ce1f a9d9   :7128 -          lda #stw
+  ce21 8d0edd :7130 -          sta tst        ;timer starten
+  ce24 a501   :7132 -          lda cport
+  ce26 4908   :7134 -          eor #$08       ;inv.
+  ce28 8501   :7136 -          sta cport
+  ce2a b016   :7138 -          bcs wby5       ;ev. pruefsumme
+  ce2c a901   :7140 -          lda #$01
+  ce2e 2c0ddd :7142 -wby4      bit icrb
+  ce31 f0fb   :7144 -          beq wby4       ;time out?
+  ce33 a9d9   :7146 -          lda #stw
+  ce35 8d0edd :7148 -          sta tst        ;timer starten
+  ce38 a501   :7150 -          lda cport
+  ce3a 4908   :7152 -          eor #$08       ;inv.
+  ce3c 8501   :7154 -          sta cport
+  ce3e 88     :7156 -          dey 
+  ce3f d0cc   :7158 -          bne wby1       ;naechstes bit
+  ce41 60     :7160 -          rts 
+  ce42 e65d   :7162 -wby5      inc chksml     ;pruefsumme
+  ce44 d002   :7164 -          bne wby6
+  ce46 e65e   :7166 -          inc chksmh     ;berechnen
+  ce48 88     :7178 -wby6      dey 
+  ce49 d0c2   :7180 -          bne wby1
+  ce4b 60     :7182 -          rts 
+  ;*****************************
+  ;* write block
+  ;*****************************
+  ;
+  ce4c 48     :8112 -write     pha 
+  ce4d a240   :8115 -          ldx #64        ;anzahl d. syncs
+  ce4f a916   :8116 -wbl1      lda #$16       ;sync
+  ce51 2003ce :8118 -          jsr wrtab
+  ce54 ca     :8122 -          dex 
+  ce55 d0f8   :8124 -          bne wbl1
+  ce57 68     :8126 -          pla            ;blockkennung
+  ce58 2003ce :8128 -          jsr wrtab      ;schreiben
+  ;y-reg nach wrtab ist immer 0!
+  ce5b 845d   :8134 -          sty chksml     ;pruefsumme
+  ce5d 845e   :8136 -          sty chksmh     ;loeschen
+  ce5f a661   :8137 -          ldx poenl
+  ce61 b15f   :8138 -wbl2      lda (pointl),y
+  ce63 2009ce :8140 -          jsr wrta
+  ce66 e65f   :8142 -          inc pointl     ;zeiger erhoehen
+  ce68 d002   :8144 -          bne wbl3
+  ce6a e660   :8146 -          inc pointh
+  ce6c 200bce :8148 -wbl3      jsr wrtb
+  ce6f e45f   :8152 -          cpx pointl     ;blockende
+  ce71 d0ee   :8154 -          bne wbl2
+  ce73 a560   :8156 -          lda pointh
+  ce75 c562   :8158 -          cmp poenh
+  ce77 d0e8   :8160 -          bne wbl2
+  ce79 a65e   :8162 -          ldx chksmh     ;pruefsumme
+  ce7b a55d   :8164 -          lda chksml     ;speichern
+  ce7d 2003ce :8166 -          jsr wrtab
+  ce80 8a     :8170 -          txa 
+  ce81 2003ce :8172 -          jsr wrtab
+  ce84 4c09ce :8176 -          jmp wrta       ;schlussbit
+  ;*****************************
+  ;* namenspruefung save
+  ;*****************************
+  ;
+  ce87 a010   :9104 -sname     ldy #16
+  ce89 a920   :9105 -          lda #" "
+  ce8b 993b03 :9106 -snclear   sta puffer-1,y ;puffer
+  ce8e 88     :9107 -          dey            ;loeschen
+  ce8f d0fa   :9108 -          bne snclear
+  ce91 a200   :9111 -          ldx #0         ;vorher y=0
+  ce93 f021   :9112 -          beq sncheck    ;immer
+  ce95 b1bb   :9117 -snloop    lda (inbuf),y  ;filename
+  ce97 c92a   :9118 -          cmp #"*"       ;platzhalter
+  ce99 f021   :9119 -          beq snerror    ;illegal
+  ce9b c93f   :9120 -          cmp #"?"       ;platzhalter
+  ce9d f01d   :9121 -          beq snerror    ;illegal
+  ce9f c92e   :9124 -          cmp #"."
+  cea1 d00a   :9125 -          bne snstore
+  cea3 c00d   :9126 -          cpy #13        ;punktpos.
+  cea5 b015   :9127 -          bcs snerror    ;name zu lang - fehler!
+  cea7 e00d   :9128 -          cpx #13        ;punkt doppelt - fehler!
+  cea9 b011   :9129 -          bcs snerror
+  ceab a20c   :9130 -          ldx #12        ;punktpos.
+  cead 9d3c03 :9132 -snstore   sta puffer,x   ;puffer
+  ceb0 e8     :9133 -          inx            ;uebertragen
+  ceb1 e010   :9134 -          cpx #16        ;pufferende?
+  ceb3 f005   :9135 -          beq snok       ;voll!
+  ceb5 c8     :9137 -          iny            ;naechstes
+  ceb6 c4b7   :9138 -sncheck   cpy nlen       ;eingabe ende?
+  ceb8 90db   :9139 -          bcc snloop     ;weiter
+  ceba 18     :9147 -snok      clc            ;c-flag
+  cebb 60     :9148 -          rts 
+  cebc 38     :9149 -snerror   sec            ;error
+  cebd 60     :9150 -          rts 
+  ;*****************************
+  ;* supertape betriebssys.save
+  ;*****************************
+  ;
+  cebe a5ba   :10104-save      lda dn         ;device#
+  cec0 c907   :10109-          cmp #7         ;supertape?
+  cec2 f003   :10114-          beq sv2
+  cec4 6c0dca :10119-sv1       jmp (bssav)    ;zum alten vektor
+  cec7 a03b   :10124-sv2       ldy #(msgpprt-msgtxt)
+  cec9 201cca :10125-          jsr msg        ;press play ...
+  cecc a901   :10126-          lda #1
+  cece 85c0   :10127-          sta mflag
+  ced0 a93c   :10130-          lda #<(puffer)
+  ced2 85f9   :10131-          sta cbuf
+  ced4 a903   :10132-          lda #>(puffer) ;kassetten-puffer
+  ced6 85fa   :10133-          sta cbuf+1     ;bestimmen
+  ced8 20f3ce :10134-          jsr sts        ;abspeichern
+  cedb 9010   :10139-          bcc svexit
+  cedd c900   :10144-          cmp #00        ;break?
+  cedf d007   :10149-          bne svifn
+  cee1 20edce :10154-svbreak   jsr svexit     ;break
+  cee4 a900   :10159-          lda #0         ;meldung
+  cee6 38     :10164-          sec 
+  cee7 60     :10169-          rts 
+  cee8 a057   :10174-svifn     ldy #(msgifn-msgtxt)
+  ceea 201cca :10179-          jsr msg        ;invalid filename
+  ceed 20a3fd :10200-svexit    jsr ciainit
+  cef0 18     :10201-          clc 
+  cef1 58     :10202-          cli 
+  cef2 60     :10203-          rts 
+  ;*****************************
+  ;* supertape save
+  ;*****************************
+  ;
+  cef3 2087ce :10500-sts       jsr sname
+  cef6 9003   :10501-          bcc sts0
+  cef8 a901   :10502-          lda #01        ;errorcode
+  cefa 60     :10503-          rts 
+  cefb ba     :10504-sts0      tsx 
+  cefc 8e0cca :10505-          stx stkt       ;stack merken
+  ceff 2084cf :10506-          jsr setup
+  cf02 2011ca :10507-          jsr delay
+  cf05 a010   :10508-          ldy #16
+  cf07 a5b9   :10509-          lda seca       ;sek.adr.
+  cf09 91f9   :10510-          sta (cbuf),y   ;baudrate
+  cf0b c8     :10511-          iny 
+  cf0c a5c1   :10515-          lda anfl       ;startadr.
+  cf0e 91f9   :10520-          sta (cbuf),y
+  cf10 c8     :10521-          iny 
+  cf11 a5c2   :10525-          lda anfh
+  cf13 91f9   :10530-          sta (cbuf),y
+  cf15 c8     :10531-          iny 
+  cf16 38     :10535-          sec            ;laenge
+  cf17 a5ae   :10540-          lda endl
+  cf19 e5c1   :10545-          sbc anfl
+  cf1b 91f9   :10550-          sta (cbuf),y
+  cf1d c8     :10551-          iny 
+  cf1e a5af   :10555-          lda endh
+  cf20 e5c2   :10560-          sbc anfh
+  cf22 91f9   :10565-          sta (cbuf),y
+  cf24 c8     :10566-          iny 
+  cf25 a900   :10570-          lda #0
+  cf27 91f9   :10575-sts1      sta (cbuf),y
+  cf29 c8     :10580-          iny 
+  cf2a c019   :10585-          cpy #25
+  cf2c 90f9   :10590-          bcc sts1
+  cf2e 8d05dd :10595-          sta cntbh      ;timerwert
+  cf31 a5f9   :10600-          lda cbuf
+  cf33 855f   :10605-          sta pointl
+  cf35 a6fa   :10610-          ldx cbuf+1
+  cf37 8660   :10615-          stx pointh
+  cf39 18     :10620-          clc 
+  cf3a 6919   :10625-          adc #$19       ;pufferlaenge
+  cf3c 8561   :10630-          sta poenl
+  cf3e 9001   :10631-          bcc sts11
+  cf40 e8     :10632-          inx 
+  cf41 8662   :10633-sts11     stx poenh
+  cf43 a9ff   :10635-          lda #lsl1
+  cf45 85fc   :10640-          sta tim1
+  cf47 a978   :10645-          lda #lsl0      ;timerwerte
+  cf49 85fb   :10650-          sta tim0       ;3600 baud
+  cf4b 8d04dd :10655-          sta cntbl
+  cf4e a9d9   :10660-          lda #stw       ;timer
+  cf50 8d0edd :10665-          sta tst        ;starten
+  cf53 a92a   :10670-          lda #$2a       ;para.block
+  cf55 204cce :10675-          jsr write      ;schreiben
+  cf58 2011ca :10680-          jsr delay
+  cf5b 24b9   :10685-          bit seca       ;baudrate
+  cf5d 100b   :10690-          bpl sts2
+  cf5f a978   :10695-          lda #hsl1      ;7200
+  cf61 85fc   :10700-          sta tim1
+  cf63 a934   :10705-          lda #hsl0
+  cf65 85fb   :10710-          sta tim0
+  cf67 8d04dd :10715-          sta cntbl      ;timer setzen
+  cf6a a5c1   :10720-sts2      lda anfl       ;start
+  cf6c 855f   :10725-          sta pointl
+  cf6e a5c2   :10730-          lda anfh
+  cf70 8560   :10735-          sta pointh
+  cf72 a5ae   :10740-          lda endl       ;ende
+  cf74 8561   :10745-          sta poenl
+  cf76 a5af   :10750-          lda endh
+  cf78 8562   :10755-          sta poenh
+  cf7a a9c5   :10760-          lda #$c5       ;datenblock
+  cf7c 204cce :10765-          jsr write      ;schreiben
+  cf7f 18     :10766-          clc 
+  cf80 58     :10767-          cli 
+  cf81 4c48cb :10770-          jmp endsr
+  ;*****************************
+  ;* setup save/load vorbereiten
+  ;*****************************
+  ;
+  cf84 78     :10810-setup     sei 
+  cf85 ad1803 :10815-          lda nmiv
+  cf88 8d08ca :10820-          sta nmit
+  cf8b ad1903 :10825-          lda nmiv+1
+  cf8e 8d09ca :10830-          sta nmit+1
+  cf91 a9ba   :10835-          lda #<(brksr)
+  cf93 8d1803 :10840-          sta nmiv
+  cf96 a9cb   :10845-          lda #>(brksr)  ;nmi-vektor
+  cf98 8d1903 :10850-          sta nmiv+1     ;setzen
+  cf9b ad1403 :10865-          lda irqv
+  cf9e 8d0aca :10870-          sta irqt
+  cfa1 ad1503 :10875-          lda irqv+1
+  cfa4 8d0bca :10880-          sta irqt+1
+  cfa7 a9c8   :10885-          lda #<(rddata) ;bytelese
+  cfa9 8d1403 :10890-          sta irqv
+  cfac a9ca   :10895-          lda #>(rddata) ;routine
+  cfae 8d1503 :10900-          sta irqv+1
+  cfb1 a910   :10905-          lda #$10       ;auf bandtaste
+  cfb3 2401   :10908-su2       bit cport      ;warten
+  cfb5 d0fc   :10911-          bne su2
+  cfb7 2401   :10914-          bit cport      ;ent-
+  cfb9 d0f8   :10917-          bne su2        ;prellen
+  cfbb a501   :10920-          lda cport
+  cfbd 291f   :10923-          and #$1f       ;motor
+  cfbf 8501   :10926-          sta cport      ;ein
+  cfc1 ad11d0 :10932-          lda vicrg      ;screen
+  cfc4 29ef   :10935-          and #$ef       ;disable
+  cfc6 8d11d0 :10938-          sta vicrg
+  cfc9 60     :10941-          rts 
+  ;*****************************
+  ;* supertape einsprung
+  ;*****************************
+  ;
+  cfca ad3003 :11110-begin     lda $330
+  cfcd 8d0fca :11111-          sta bslod
+  cfd0 a997   :11115-          lda #<(load)   ;load
+  cfd2 8d3003 :11120-          sta $330       ;vektor
+  cfd5 ad3103 :11125-          lda $331
+  cfd8 8d10ca :11126-          sta bslod+1
+  cfdb a9cc   :11130-          lda #>(load)
+  cfdd 8d3103 :11140-          sta $331
+  cfe0 ad3203 :11145-          lda $332
+  cfe3 8d0dca :11146-          sta bssav
+  cfe6 a9be   :11150-          lda #<(save)   ;save
+  cfe8 8d3203 :11160-          sta $332       ;vektor
+  cfeb ad3303 :11165-          lda $333
+  cfee 8d0eca :11166-          sta bssav+1
+  cff1 a9ce   :11170-          lda #>(save)
+  cff3 8d3303 :11180-          sta $333
+  cff6 a000   :11190-          ldy #0
+  cff8 4c1cca :11200-          jmp msg
+               19999-.en
+
