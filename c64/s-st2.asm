@@ -1,6 +1,6 @@
-;.OB "C-ST2-23,P,W"
-;.SY 2,8,2,"Y-ST2-23,P,W"
-;.LI 3,8,3,"L-ST2-23,P,W"
+;.OB "C-ST2-24,P,W"
+;.SY 2,8,2,"Y-ST2-24,P,W"
+;.LI 3,8,3,"L-ST2-24,P,W"
 ;********************************
 ;*                              *
 ;*   S U P E R T A P E   C 6 4  *
@@ -10,8 +10,11 @@
 ;*   ERSTELLT 27/5/1990, JK     *
 ;*                              *
 ;*   VERBESSERT 6/6/1990 JK     *
-;*              10/6/90         *
+;*              10/6/1990 JK    *
 ;*   UEBERARBEITET 28/3/2012 JK *
+;*                              *
+;*   JK: JOHANN E. KLASEK       *
+;*       J@KLASEK.AT            *
 ;*                              *
 ;********************************
 ;
@@ -90,7 +93,7 @@ TMPX     ... RMB(1)        ;PRUEFSUMME: TEMP. X-REG
 .EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-.BA $CA10
+.BA $CA08
 NMIT     .WO 0             
 IRQT     .WO 0             
 STKT     .BY 0             
@@ -268,11 +271,11 @@ ENDSR    PHA
 ;
 ; Y-REG BIT7 MUSS IMMER 0 SEIN!
 RDBYTECS BIT WTFLAG        
-         BPL RDBYTE        ;WARTEN
+         BPL RDBYTECS      ;WARTEN
          STY WTFLAG        ;FLAG LOESCHEN
          LDA BUFF          
-CALCCS   LSR               
-         LSR               
+CALCCS   LSR               ;PRUEFSUMME
+         LSR               ;HIGH NIBBLE
          LSR               
          LSR               ;BIT3 IN C
          STA TMPX          
@@ -453,7 +456,7 @@ LO1      LDY #(MSGPPT-MSGTXT)
          STA CBUF          ;SETZEN
          LDA #>(PUFFER)    
          STA CBUF+1        
-LO3      JSR STP           ;FILE SUCHEN
+LONEXT   JSR STP           ;FILE SUCHEN
          BCC LO4           
          TAX               ;BREAK?
          BEQ LOBRK         
@@ -461,23 +464,25 @@ LO3      JSR STP           ;FILE SUCHEN
          BNE LO31          ;FEHLERHAFT?
          LDY #(MSGBPB-MSGTXT)
 LO32     JSR MSG           
-         BCC LO3           
+         LDA #0            
+         PHA               
+         BCC LODISP        
 LO31     CMP #01           ;FILENAMENSYNTAX FALSCH?
-         BNE LO3           ;SONST WEITER SUCHEN
+         BNE LONEXT        ;SONST WEITER SUCHEN
          LDY #(MSGIFN-MSGTXT)
          BNE LO61          
 LO4      PHA               ;FEHLERCODE
          LDY #$63          ;'FOUND'
          JSR BSMSG         
          JSR OUTNAM        ;FILENAME
-         LDA #4            
+LODISP   LDA #10           
          STA BUFF          
 LO5      JSR DELAY         
-         DEC BUFF          ;2 SEK
+         DEC BUFF          ;EINIGE SEK WARTEN
          BNE LO5           
          PLA               
          TAX               
-         BEQ LO3           ;FILE PASST NICHT
+         BEQ LONEXT        ;FILE PASST NICHT
          JSR LVM           ;'LOADING/VERIFYING'
          JSR OUTNAM        ;FILENAME
          JSR STL           ;LOAD DATA
@@ -570,10 +575,10 @@ STPREAD  JSR RDBYTECS      ;BYTE VOM BAND
          CPY #$19          ;BLOCK ENDE
          BCC STPREAD       
          JSR RDBYTE        
-         CMP CHKSML        
+         CMP CHKSML        ;PRUEFSUMME
          BNE STPCSERR      
-         JSR RDBYTE        
-         CMP CHKSMH        ;PRUEFSUMME
+         JSR RDBYTE        ;PS HIGH
+         CMP CHKSMH        
          BNE STPCSERR      ;TESTEN
          LDY #0            
          LDX #0            

@@ -1,7 +1,7 @@
-;<s-st2-23> ==1FD8==
-    1 ;.OB "C-ST2-23,P,W"
-    2 ;.SY 2,8,2,"Y-ST2-23,P,W"
-    3 ;.LI 3,8,3,"L-ST2-23,P,W"
+;<s-st2-24> ==1FD8==
+    1 ;.OB "C-ST2-24,P,W"
+    2 ;.SY 2,8,2,"Y-ST2-24,P,W"
+    3 ;.LI 3,8,3,"L-ST2-24,P,W"
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -11,9 +11,12 @@
    16 ;*   ERSTELLT 27/5/1990, JK     *
    17 ;*                              *
    18 ;*   VERBESSERT 6/6/1990 JK     *
-   19 ;*              10/6/90         *
+   19 ;*              10/6/1990 JK    *
    20 ;*   UEBERARBEITET 28/3/2012 JK *
    21 ;*                              *
+   22 ;*   JK: JOHANN E. KLASEK       *
+   23 ;*       J@KLASEK.AT            *
+   24 ;*                              *
    99 ;********************************
   100 ;
   101          .MA RMB(N)        
@@ -91,7 +94,7 @@
   264 .EQ STROUT  = $AB1E ;STR.OUT
   266 ;
   268 ;
-  270 .BA $CA10
+  270 .BA $CA08
   500 NMIT     .WO 0             
   502 IRQT     .WO 0             
   504 STKT     .BY 0             
@@ -269,11 +272,11 @@
  3503 ;
  3504 ; Y-REG BIT7 MUSS IMMER 0 SEIN!
  3510 RDBYTECS BIT WTFLAG        
- 3512          BPL RDBYTE        ;WARTEN
+ 3512          BPL RDBYTECS      ;WARTEN
  3514          STY WTFLAG        ;FLAG LOESCHEN
  3516          LDA BUFF          
- 3520 CALCCS   LSR               
- 3521          LSR               
+ 3520 CALCCS   LSR               ;PRUEFSUMME
+ 3521          LSR               ;HIGH NIBBLE
  3522          LSR               
  3523          LSR               ;BIT3 IN C
  3525          STA TMPX          
@@ -454,7 +457,7 @@
  6124          STA CBUF          ;SETZEN
  6125          LDA #>(PUFFER)    
  6126          STA CBUF+1        
- 6127 LO3      JSR STP           ;FILE SUCHEN
+ 6127 LONEXT   JSR STP           ;FILE SUCHEN
  6128          BCC LO4           
  6129          TAX               ;BREAK?
  6130          BEQ LOBRK         
@@ -462,23 +465,25 @@
  6132          BNE LO31          ;FEHLERHAFT?
  6133          LDY #(MSGBPB-MSGTXT)
  6134 LO32     JSR MSG           
- 6135          BCC LO3           
- 6136 LO31     CMP #01           ;FILENAMENSYNTAX FALSCH?
- 6137          BNE LO3           ;SONST WEITER SUCHEN
- 6138          LDY #(MSGIFN-MSGTXT)
- 6139          BNE LO61          
+ 6135          LDA #0            
+ 6136          PHA               
+ 6137          BCC LODISP        
+ 6138 LO31     CMP #01           ;FILENAMENSYNTAX FALSCH?
+ 6139          BNE LONEXT        ;SONST WEITER SUCHEN
+ 6140          LDY #(MSGIFN-MSGTXT)
+ 6141          BNE LO61          
  6150 LO4      PHA               ;FEHLERCODE
  6151          LDY #$63          ;'FOUND'
  6152          JSR BSMSG         
  6153          JSR OUTNAM        ;FILENAME
- 6154          LDA #4            
+ 6154 LODISP   LDA #10           
  6155          STA BUFF          
  6156 LO5      JSR DELAY         
- 6157          DEC BUFF          ;2 SEK
+ 6157          DEC BUFF          ;EINIGE SEK WARTEN
  6158          BNE LO5           
  6159          PLA               
  6160          TAX               
- 6161          BEQ LO3           ;FILE PASST NICHT
+ 6161          BEQ LONEXT        ;FILE PASST NICHT
  6162          JSR LVM           ;'LOADING/VERIFYING'
  6163          JSR OUTNAM        ;FILENAME
  6164          JSR STL           ;LOAD DATA
@@ -570,13 +575,13 @@
  6642          INY               
  6644          CPY #$19          ;BLOCK ENDE
  6646          BCC STPREAD       
- 6648          JSR RDBYTE        
- 6650          CMP CHKSML        
- 6652          BNE STPCSERR      
- 6654          JSR RDBYTE        
- 6656          CMP CHKSMH        ;PRUEFSUMME
- 6658          BNE STPCSERR      ;TESTEN
- 6660          LDY #0            
+ 6655          JSR RDBYTE        
+ 6656          CMP CHKSML        ;PRUEFSUMME
+ 6657          BNE STPCSERR      
+ 6658          JSR RDBYTE        ;PS HIGH
+ 6659          CMP CHKSMH        
+ 6660          BNE STPCSERR      ;TESTEN
+ 6661          LDY #0            
  6662          LDX #0            
  6670 STPLOOP  LDA (INBUF),Y     
  6672          CMP #"."          
