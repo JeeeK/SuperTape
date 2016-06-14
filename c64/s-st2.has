@@ -1,4 +1,7 @@
-;<s-st2-22> ==1FD8==
+;<s-st2-23> ==1FD8==
+    1 ;.OB "C-ST2-23,P,W"
+    2 ;.SY 2,8,2,"Y-ST2-23,P,W"
+    3 ;.LI 3,8,3,"L-ST2-23,P,W"
    10 ;********************************
    11 ;*                              *
    12 ;*   S U P E R T A P E   C 6 4  *
@@ -17,7 +20,6 @@
   102 HERE     .BA HERE+N        
   103          .RT               
   104 ;
-  105 .OB "C-ST2-22,P,W"
   114 .EQ CPORT   = $01    ; MP-PORT
   118 .EQ LOSPDL  = $46    ; TIMER
   120 .EQ LOSPDH  = $81    ;  3600 BD
@@ -47,6 +49,7 @@
   168 ;
   170          .BA $93           ;TEMPORAERER AKKU
   172 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
+  173 TMPX     ... RMB(1)        ;PRUEFSUMME: TEMP. X-REG
   178 ;
   180 .EQ STATUS  = $90
   182 .EQ DN      = $BA ;DEV.NUM.
@@ -88,7 +91,7 @@
   264 .EQ STROUT  = $AB1E ;STR.OUT
   266 ;
   268 ;
-  270 .BA $CA25
+  270 .BA $CA10
   500 NMIT     .WO 0             
   502 IRQT     .WO 0             
   504 STKT     .BY 0             
@@ -260,6 +263,34 @@
  3438          PLP               
  3439          PLA               
  3441          RTS               
+ 3500 ;*****************************
+ 3501 ;* BYTE LESEN MIT PRUEFSUMME
+ 3502 ;*****************************
+ 3503 ;
+ 3504 ; Y-REG BIT7 MUSS IMMER 0 SEIN!
+ 3510 RDBYTECS BIT WTFLAG        
+ 3512          BPL RDBYTE        ;WARTEN
+ 3514          STY WTFLAG        ;FLAG LOESCHEN
+ 3516          LDA BUFF          
+ 3520 CALCCS   LSR               
+ 3521          LSR               
+ 3522          LSR               
+ 3523          LSR               ;BIT3 IN C
+ 3525          STA TMPX          
+ 3530          LDA BUFF          
+ 3531          AND #07           ;NUR NOCH BIT0-2
+ 3535          TAX               
+ 3540          LDA BCTAB,X       ;BITCOUNT BIT0-2
+ 3541          LDX TMPX          ;BITCOUNT BIT4-7
+ 3542          ADC BCTAB,X       ;IN C IST BIT3
+ 3545          ADC CHKSML        ;+PRUEFSUMME
+ 3550          STA CHKSML        
+ 3560          BCC CCSEXIT       
+ 3565          INC CHKSMH        
+ 3570 CCSEXIT  LDA BUFF          
+ 3575          RTS               
+ 3580 BCTAB    .BY 0,1,1,2,1,2,2,3; NIBBLEWERTE 0-7
+ 3585          .BY 1,2,2,3,2,3,3,4; NIBBLEWERTE 8-15
  3600 ;
  3602 ;*****************************
  3604 ;* SUPERTAPE ABBRUCH
@@ -339,23 +370,13 @@
  5258          STY CHKSML        ;PRUEFSUMME
  5260          STY CHKSMH        ;LOESCHEN
  5261 ;
- 5262 STLREAD  JSR RDBYTE        
+ 5262 STLREAD  JSR RDBYTECS      
  5270          BIT TEMPA         ;VERIFY?
  5272          BPL STLNOVER      
  5274          CMP (POINTL),Y    
  5275          BNE STLERR4       ;ERROR
  5276          .BY $2C           
  5277 STLNOVER STA (POINTL),Y    
- 5278          LDX CHKSML        ;CHECKSUM
- 5279 ;
- 5280 STLPLOOP LSR               ;BERECHNEN
- 5281          BCC STLPNULL      ;1EN ZAEHLEN
- 5282          INX               
- 5284          BNE STLPLOOP      
- 5286          INC CHKSMH        
- 5287          BEQ STLPLOOP      ;UEBERLAUF - WEITER!
- 5288 STLPNULL BNE STLPLOOP      
- 5290          STX CHKSML        
  5291 ;
  5292          INC POINTL        ;POINTER
  5294          BNE STL6          ;ERHOEHEN
@@ -543,18 +564,9 @@
  6610          BNE LOSYNC        
  6612          STY CHKSML        ;PRUEFSUMME
  6614          STY CHKSMH        ;LOESCHEN
- 6616 STPREAD  JSR RDBYTE        ;BYTE VOM BAND
+ 6616 STPREAD  JSR RDBYTECS      ;BYTE VOM BAND
  6618          STA (CBUF),Y      ;ABLEGEN
  6620 ;
- 6626          LDX CHKSML        
- 6628 STPPLOOP LSR               ;PRUEFSUM
- 6630          BCC STPPNULL      ;BERECHNEN
- 6632          INX               
- 6634          BNE STPPLOOP      
- 6636          INC CHKSMH        
- 6637          BEQ STPPLOOP      ;UEBERLAUF - WEITER!
- 6638 STPPNULL BNE STPPLOOP      ;ALLE 1EN GEZAEHLT?
- 6639          STX CHKSML        
  6642          INY               
  6644          CPY #$19          ;BLOCK ENDE
  6646          BCC STPREAD       

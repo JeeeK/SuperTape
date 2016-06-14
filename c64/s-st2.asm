@@ -1,3 +1,6 @@
+;.OB "C-ST2-23,P,W"
+;.SY 2,8,2,"Y-ST2-23,P,W"
+;.LI 3,8,3,"L-ST2-23,P,W"
 ;********************************
 ;*                              *
 ;*   S U P E R T A P E   C 6 4  *
@@ -16,7 +19,6 @@
 HERE     .BA HERE+N        
          .RT               
 ;
-.OB "C-ST2-22,P,W"
 .EQ CPORT   = $01    ; MP-PORT
 .EQ LOSPDL  = $46    ; TIMER
 .EQ LOSPDH  = $81    ;  3600 BD
@@ -46,6 +48,7 @@ POENH    ... RMB(1)
 ;
          .BA $93           ;TEMPORAERER AKKU
 TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
+TMPX     ... RMB(1)        ;PRUEFSUMME: TEMP. X-REG
 ;
 .EQ STATUS  = $90
 .EQ DN      = $BA ;DEV.NUM.
@@ -87,7 +90,7 @@ TEMPA    ... RMB(1)        ;LOAD/VERIFY FLAG, BIT7
 .EQ STROUT  = $AB1E ;STR.OUT
 ;
 ;
-.BA $CA25
+.BA $CA10
 NMIT     .WO 0             
 IRQT     .WO 0             
 STKT     .BY 0             
@@ -259,6 +262,34 @@ ENDSR    PHA
          PLP               
          PLA               
          RTS               
+;*****************************
+;* BYTE LESEN MIT PRUEFSUMME
+;*****************************
+;
+; Y-REG BIT7 MUSS IMMER 0 SEIN!
+RDBYTECS BIT WTFLAG        
+         BPL RDBYTE        ;WARTEN
+         STY WTFLAG        ;FLAG LOESCHEN
+         LDA BUFF          
+CALCCS   LSR               
+         LSR               
+         LSR               
+         LSR               ;BIT3 IN C
+         STA TMPX          
+         LDA BUFF          
+         AND #07           ;NUR NOCH BIT0-2
+         TAX               
+         LDA BCTAB,X       ;BITCOUNT BIT0-2
+         LDX TMPX          ;BITCOUNT BIT4-7
+         ADC BCTAB,X       ;IN C IST BIT3
+         ADC CHKSML        ;+PRUEFSUMME
+         STA CHKSML        
+         BCC CCSEXIT       
+         INC CHKSMH        
+CCSEXIT  LDA BUFF          
+         RTS               
+BCTAB    .BY 0,1,1,2,1,2,2,3; NIBBLEWERTE 0-7
+         .BY 1,2,2,3,2,3,3,4; NIBBLEWERTE 8-15
 ;
 ;*****************************
 ;* SUPERTAPE ABBRUCH
@@ -338,23 +369,13 @@ STL1     CLC
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
 ;
-STLREAD  JSR RDBYTE        
+STLREAD  JSR RDBYTECS      
          BIT TEMPA         ;VERIFY?
          BPL STLNOVER      
          CMP (POINTL),Y    
          BNE STLERR4       ;ERROR
          .BY $2C           
 STLNOVER STA (POINTL),Y    
-         LDX CHKSML        ;CHECKSUM
-;
-STLPLOOP LSR               ;BERECHNEN
-         BCC STLPNULL      ;1EN ZAEHLEN
-         INX               
-         BNE STLPLOOP      
-         INC CHKSMH        
-         BEQ STLPLOOP      ;UEBERLAUF - WEITER!
-STLPNULL BNE STLPLOOP      
-         STX CHKSML        
 ;
          INC POINTL        ;POINTER
          BNE STL6          ;ERHOEHEN
@@ -542,18 +563,9 @@ LOSYNC   JSR INSYN         ;SYNCHRONISIEREN
          BNE LOSYNC        
          STY CHKSML        ;PRUEFSUMME
          STY CHKSMH        ;LOESCHEN
-STPREAD  JSR RDBYTE        ;BYTE VOM BAND
+STPREAD  JSR RDBYTECS      ;BYTE VOM BAND
          STA (CBUF),Y      ;ABLEGEN
 ;
-         LDX CHKSML        
-STPPLOOP LSR               ;PRUEFSUM
-         BCC STPPNULL      ;BERECHNEN
-         INX               
-         BNE STPPLOOP      
-         INC CHKSMH        
-         BEQ STPPLOOP      ;UEBERLAUF - WEITER!
-STPPNULL BNE STPPLOOP      ;ALLE 1EN GEZAEHLT?
-         STX CHKSML        
          INY               
          CPY #$19          ;BLOCK ENDE
          BCC STPREAD       
