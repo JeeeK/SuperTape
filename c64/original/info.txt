@@ -1,0 +1,58 @@
+SuperTape
+=========
+
+Edited by: Johann Klasek . at, 2016-06-15
+
+Author: Eckart Steffens
+
+Source: Heise c't Magazine 1984/10 p. 45-49
+		Description, assembler listing (incomplete), basic loader
+	Heise c't Magazine 1984/12 p. 10
+		assembler listing (missing parts)
+
+Errata and hints:
+	c't Magazine 1984/12 p. 9
+		Basic OPEN command is not supported
+		(device 7 used for SuperTape, leads
+		to ?DEVICE NOT PRESENT ERROR)
+		Heise noted that an extension is
+		in preparation.
+	c't Magazine 1984/12 p. 10
+	c't Magazine 1985/2 p. 11
+		Usage with EXBASIC Level II: 
+			1. Leave EXBASIC with command "BASIC"
+			2. Do SuperTape LOAD/SAVE
+			3. Re-enter EXBASIC with ?USR(0)
+	c't Magazine 1985/4 p. 10
+		ROM-based SuperTape can be used with
+		project "EPROM-Bank für den C64", but
+		the loader part has to be re-assembled
+		into another address range. Heise
+		announce a suitable variant to be added
+		to their software service.
+
+Later distributions:
+
+	Diskmag Input64 2/85
+	http://c64-online.com/?ddownload=4460
+	Supertape (Datasetten-Beschleuniger) 
+
+	Diskmag Input64 4/85 
+	http://c64-online.com/?ddownload=4462
+	Supertape D2 (Datasetten-Beschleuniger)
+
+
+Contents:
+
+	c-st2.prg			Code, $CA7D-CF50, entry 53000 ($CF08)
+	info.txt			this text
+	s-st2.asm			Assembler Source, ASCII, no linenumbers
+	s-st2.has			Assembler Source, ASCII 
+	s-st2.prg			Assembler Source, CBM format
+	supertape-loader.bas		Basic Loader for C64, ASCII format
+	supertape-loader.prg		Basic Loader for C64, CBM format
+
+Assembler syntax:
+	64'er Magazine HypraAss Makro-Assembler
+
+
