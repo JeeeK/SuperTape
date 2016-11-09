@@ -26,10 +26,13 @@ original/		variations of the original implementation
 			targeted for the Eurocom computer with option
 			for Dragon 32/64 or TRS-80 Color Computer 2
 
-  corrtypos		typos corrected, mainly in comments but also
+  corrtypos/		typos corrected, mainly in comments but also
 			in text strings for output messages.
 
-  fullcomments		full commented (added missing, extended consisting ones)
+  fullcomments/		full commented (added missing, extended consisting ones)
+
+  nobugs/		known bugs fixed (not discussed in c't Magazin)
+
 
 
 
@@ -42,5 +45,41 @@ pseudo opcodes.
 
 The assembler program refered in the make-files is called "a09" from the
 sbc09 project, see https://github.com/6809/sbc09/tree/master/src
+
+
+
+
+
+Bugs of the original version
+-----------------------------
+
+1. lda/sta before label "salt" does not handle 16 bit values.
+
+   Fix: replaced by ldd/std
+
+2. End address usage in data block loops wrong.
+
+   The end address is calculated as first byte after the data block
+   but the routines process this additional byte which is wrong.
+   The block length does not match the real data block size which
+   violates the SuperTape format and makes it incompatible to
+   other implementation, left it compatible to itself only.
+
+   A save data block contains 1 byte more then the paramter block
+   length states.
+   Loading and verifying expects 1 byte more then given in the
+   parameter block.
+
+   Fix: Consistently take the end address as last data block byte+1
+   	and change the data processing loops condition to "lower than".
+	(instead of "lower or same").
+
+3. Non-matching files' data output shown with wrong values.
+
+   Files from tape not matching the file pattern given are shown
+   with a currupted, normally wrong end address.
+
+   Fix: The end address calculation came to late and will be done
+ 	earlier (right after reading the parameter block).
 
 
