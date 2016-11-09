@@ -1,0 +1,40 @@
+SuperTape for 6809 based systems
+================================
+2016-09 J.E. Klasek j AT klasek at
+
+
+The SuperTape tape format is described in article
+
+c't Magazin 1984-04 p. 21: SuperTape (in german)
+
+
+
+
+Files
+-----
+
+original/		variations of the original implementation
+
+  st09			binary
+  st09.asm		sourcecode
+  st09.lst		list-output file from the assembler
+  info.txt		this file
+
+
+  printed/		version: from original publication (in german)
+			c't Magazin 1984-08 p. 94: SuperTape 6809
+			targeted for the Eurocom computer with option
+			for Dragon 32/64 or TRS-80 Color Computer 2
+
+
+
+Assembler
+---------
+
+The assembler source conforms to standard 6809 assembly with common
+pseudo opcodes.
+
+The assembler program refered in the make-files is called "a09" from the
+sbc09 project, see https://github.com/6809/sbc09/tree/master/src
+
+
