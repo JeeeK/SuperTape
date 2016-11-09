@@ -26,6 +26,9 @@ original/		variations of the original implementation
 			targeted for the Eurocom computer with option
 			for Dragon 32/64 or TRS-80 Color Computer 2
 
+  corrtypos		typos corrected, mainly in comments but also
+			in text strings for output messages.
+
 
 
 Assembler
