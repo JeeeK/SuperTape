@@ -4,6 +4,7 @@
 4F00:                 * supertape fuer 6809          *********
 4F00:                 * autor roland wiese           *********
 4F00:                 * kommentare von johann klasek *********
+4F00:                 * fehlerkorrigiert             *********
 4F00:                 ****************************************
 4F00:                 
 4F00:                 * puffer fuer eingabe parameter
@@ -330,8 +331,8 @@
 52DF:                 
 52DF:                 ; in: nr
 52DF:                 ;     (ldname)..(ldende+1)
-52DF:                 ; out: (ldstar)..(ldstar+3)     startadresse im hex-format 
-52DF:                 ;      (ldende)..(ldende+3)     endadresse im hex-format 
+52DF:                 ; out: (ldstar)..(ldstar+3)     startadresse im hex-format
+52DF:                 ;      (ldende)..(ldende+3)     endadresse im hex-format
 52DF:                 ;      (ldende+4)               endemarke
 52DF:                 ; veraendert: a,b,u,x,y
 52DF:                 
@@ -527,56 +528,58 @@
 5438: 17FF3E                  lbsr    out             ; fehler pruefsuumme
 543B: 16008F                  lbra    stop            ; ende
 543E:                 
-543E:                 * vergleiche name - - - - - - - - - - - - - - -
+543E:                 * startadresse und endadresse - - - - - - - - -
 543E:                 
-543E: 108E4F20        re2     ldy     #ldname         ; name von band
-5442: 8E4F00                  ldx     #name           ; name angegeben
-5445: E680            n0      ldb     ,x+             ; hole byte angegeben
-5447: C12A                    cmpb    #$2a            ; stern (*)?
-5449: 2716                    beq     typ1            ; ja, dann weiter mit typ
-544B: C13F                    cmpb    #$3f            ; fragezeichen (?)?
-544D: 270A                    beq     n1              ; ja, naechstes zeichen
-544F: E1A4                    cmpb    ,y              ; gleich bandname?
-5451: 2706                    beq     n1              ; ja, naechstes zeichen
-5453: 17FE89                  lbsr    direct          ; nicht gleich, dann parameter zeigen
-5456: 16FF53                  lbra    load            ; naechster versuch
-5459: 3121            n1      leay    1,y             ; weiter im bandnamen
-545B: 108C4F2B                cmpy    #ldname+11      ; fertig?
-545F: 23E4                    bls     n0              ; nein, weiter vergleichen
-5461:                 
-5461:                 * vergleiche typ - - - - - - - - - - - - - - - -
-5461:                 
-5461: 108E4F2D        typ1    ldy     #ldtyp          ; typ vom band
-5465: 8E4F0D                  ldx     #typ            ; typ angegeben
-5468: E680            t0      ldb     ,x+             ; hole byte angegeben
-546A: C12A                    cmpb    #$2a            ; stern (*)?
-546C: 2716                    beq     t1              ; ja, dann datei gefunden!
-546E: C13F                    cmpb    #$3f            ; fragezeichen (?)?
-5470: 270A                    beq     t2              ; ja, naechstes zeichen
-5472: E1A4                    cmpb    ,y              ; gleich bandtyp?
-5474: 2706                    beq     t2              ; falscher typ?
-5476: 17FE66                  lbsr    direct          ; nicht gleich, dann parameter zeigen
-5479: 16FF30                  lbra    load            ; naechster versuch
-547C: 3121            t2      leay    1,y             ; weiter im bandtyp
-547E: 108C4F2F                cmpy    #ldtyp+2        ; fertig?
-5482: 23E4                    bls     t0              ; nein, weiter vergleichen
-5484:                 
-5484: 9630            t1      lda     ldflag          ; baudrate vom band einstellen
-5486: 9753                    sta     baud            ; fuer den datenblock
-5488:                 
-5488: 8680                    lda     #$80            ; bit 7 gesetzt
-548A: 9750                    sta     byte            ; fuer letzten eingangsstatus
-548C: 8E0000                  ldx     #$00            ; fuer pruefsumme ruecksetzen
-548F:                 
-548F: 9610                    lda     flag            ; steuerbyte
-5491: 8404                    anda    #$04            ; maskiere bit
-5493: 8104                    cmpa    #$04            ; startadresse vorgegeben?
-5495: 2604                    bne     salt            ; nein, ueberspringen
-5497: 9611                    lda     start           ; abgefragte startadresse
-5499: 9731                    sta     ldstar          ; uebernehmen
-549B: DC31            salt    ldd     ldstar          ; berechne block-
-549D: D333                    addd    ldlaen          ; endadresse + 1
-549F: DD39                    std     ldende
+543E: 9610            re2     lda     flag            ; steuerbyte
+5440: 8404                    anda    #$04            ; maskiere bit
+5442: 8104                    cmpa    #$04            ; startadresse vorgegeben?
+5444: 2604                    bne     salt            ; nein, ueberspringen
+5446: DC11                    ldd     start           ; abgefragte startadresse
+5448: DD31                    std     ldstar          ; uebernehmen
+544A: DC31            salt    ldd     ldstar          ; berechne block-
+544C: D333                    addd    ldlaen          ; endadresse + 1
+544E: DD39                    std     ldende
+5450:                 
+5450:                 * vergleiche name - - - - - - - - - - - - - - -
+5450:                 
+5450: 108E4F20                ldy     #ldname         ; name von band
+5454: 8E4F00                  ldx     #name           ; name angegeben
+5457: E680            n0      ldb     ,x+             ; hole byte angegeben
+5459: C12A                    cmpb    #$2a            ; stern (*)?
+545B: 2716                    beq     typ1            ; ja, dann weiter mit typ
+545D: C13F                    cmpb    #$3f            ; fragezeichen (?)?
+545F: 270A                    beq     n1              ; ja, naechstes zeichen
+5461: E1A4                    cmpb    ,y              ; gleich bandname?
+5463: 2706                    beq     n1              ; ja, naechstes zeichen
+5465: 17FE77                  lbsr    direct          ; nicht gleich, dann parameter zeigen
+5468: 16FF41                  lbra    load            ; naechster versuch
+546B: 3121            n1      leay    1,y             ; weiter im bandnamen
+546D: 108C4F2B                cmpy    #ldname+11      ; fertig?
+5471: 23E4                    bls     n0              ; nein, weiter vergleichen
+5473:                 
+5473:                 * vergleiche typ - - - - - - - - - - - - - - - -
+5473:                 
+5473: 108E4F2D        typ1    ldy     #ldtyp          ; typ vom band
+5477: 8E4F0D                  ldx     #typ            ; typ angegeben
+547A: E680            t0      ldb     ,x+             ; hole byte angegeben
+547C: C12A                    cmpb    #$2a            ; stern (*)?
+547E: 2716                    beq     t1              ; ja, dann datei gefunden!
+5480: C13F                    cmpb    #$3f            ; fragezeichen (?)?
+5482: 270A                    beq     t2              ; ja, naechstes zeichen
+5484: E1A4                    cmpb    ,y              ; gleich bandtyp?
+5486: 2706                    beq     t2              ; falscher typ?
+5488: 17FE54                  lbsr    direct          ; nicht gleich, dann parameter zeigen
+548B: 16FF1E                  lbra    load            ; naechster versuch
+548E: 3121            t2      leay    1,y             ; weiter im bandtyp
+5490: 108C4F2F                cmpy    #ldtyp+2        ; fertig?
+5494: 23E4                    bls     t0              ; nein, weiter vergleichen
+5496:                 
+5496: 9630            t1      lda     ldflag          ; baudrate vom band einstellen
+5498: 9753                    sta     baud            ; fuer den datenblock
+549A:                 
+549A: 8680                    lda     #$80            ; bit 7 gesetzt
+549C: 9750                    sta     byte            ; fuer letzten eingangsstatus
+549E: 8E0000                  ldx     #$00            ; fuer pruefsumme ruecksetzen
 54A1:                 
 54A1: D610                    ldb     flag            ; steuerbyte
 54A3: C402                    andb    #$02            ; modus verify/load ausmaskieren
@@ -618,7 +621,7 @@
 54E2:                 ;     ldstar                    startadresse
 54E2:                 ;     ldende                    endadresse + 1
 54E2:                 ; out: carry-flag               status ( 0 | 1 ... ok | fehler)
-54E2:                 ;      (ldstar) ... (ldende)    datenbereich
+54E2:                 ;      (ldstar) ... (ldende-1)  datenbereich
 54E2:                 ; veraendert: a,b,u,x,y
 54E2:                 
 54E2: C6FF            daten   ldb     #$ff            ; empfangen und einrasten:
@@ -646,7 +649,7 @@
 5514: 17007C          dat     lbsr    rdbyte          ; ein datenbyte
 5517: E780                    stb     ,x+             ; in den speicher
 5519: 9C39                    cmpx    ldende          ; datenendadresse erreicht?
-551B: 23F3                    bls     datlop          ; nein, weiterlesen
+551B: 25F3                    blo     datlop          ; nein, weiterlesen
 551D:                 
 551D: 9E1B                    ldx     pruef           ; bisherige pruefsumme
 551F: 8C0000                  cmpx    #$00            ; warte 4
@@ -670,7 +673,7 @@
 553E:                 ; in: baud                      baudrate ($80 = 7200)
 553E:                 ;     ldstar                    startadresse
 553E:                 ;     ldende                    endadresse + 1
-553E:                 ;     (ldstar) ... (ldende)     datenbereich
+553E:                 ;     (ldstar) ... (ldende-1)   datenbereich
 553E:                 ; out: carry-flag               status ( 0 | 1 ... ok | fehler)
 553E:                 ; veraendert: a,b,u,x,y
 553E:                 
@@ -698,7 +701,7 @@
 556D: E180                    cmpb    ,x+             ; vergleichen
 556F: 261F                    bne     ver1            ; fehlerstatus, wenn abweichung
 5571: 9C39                    cmpx    ldende          ; datenendadresse erreicht?
-5573: 23F5                    bls     verlop          ; nein, weiter vergleichen
+5573: 25F5                    blo     verlop          ; nein, weiter vergleichen
 5575:                 
 5575: 9E1B                    ldx     pruef           ; bisherige pruefsumme
 5577: 170019                  lbsr    rdbyte          ; low-byte pruefsumme
@@ -836,7 +839,7 @@
 5646: E680            datout  ldb     ,x+             ; datenbyte
 5648: 8D1C                    bsr     outch           ; auf band
 564A: 9C19                    cmpx    ende            ; ende + 1 erreicht?
-564C: 23F8                    bls     datout          ; nein, weiter
+564C: 25F8                    blo     datout          ; nein, weiter
 564E:                 
 564E:                 * sende pruefsumme datenblock - - - - - - - -
 564E:                 
@@ -976,8 +979,8 @@ SYMBOL TABLE
         L4 02 56ad        L5 02 56d6     LAENG 00 4f13       LD0 02 5150
        LD1 02 5179    LDENDE 00 4f39    LDFLAG 00 4f30    LDLAEN 00 4f33
     LDNAME 00 4f20    LDPUNK 00 4f2c    LDRES1 00 4f35    LDRES2 00 4f37
-    LDSTAR 00 4f31     LDTYP 00 4f2d      LOAD 02 53ac        N0 02 5445
-        N1 02 5459      NAME 00 4f00        NR 00 4f1d        OK 02 522e
+    LDSTAR 00 4f31     LDTYP 00 4f2d      LOAD 02 53ac        N0 02 5457
+        N1 02 546b      NAME 00 4f00        NR 00 4f1d        OK 02 522e
        OK1 02 5228        ON 02 538f       OUT 02 5379      OUT1 02 538e
       OUT2 02 5383    OUTASC 00 f33d     OUTCH 02 5666        P1 02 5253
         P2 02 5268     PANTF 02 53e7       PAR 02 53fe    PAREST 02 53f8
@@ -985,16 +988,16 @@ SYMBOL TABLE
      PRAUS 02 5277    PRNATY 02 5246     PRUEF 00 4f1b     PUNKT 00 4f0c
         RD 02 55b5     RDBIT 02 55a2    RDBYTE 02 5593    RDEINS 02 55c5
        RE1 02 5428       RE2 02 543e      READ 02 5599      RES1 00 4f15
-      RES2 00 4f17     RIGHT 02 54bc      SALT 02 549b      SAVE 02 55e0
+      RES2 00 4f17     RIGHT 02 54bc      SALT 02 544a      SAVE 02 55e0
        ST0 02 51ae       ST1 02 51d1       ST2 02 51d4     START 00 4f11
     START1 02 5117      STOP 02 54cd       SV0 02 5144      SYCD 02 54f9
     SYCDAR 02 54e4      SYCP 02 53d1    SYCPAR 02 53b9      SYCV 02 5555
-    SYCVER 02 5540    SYNCDA 02 5634    SYNCPA 02 55f1        T0 02 5468
-        T1 02 5484        T2 02 547c     TBAUD 02 5041     TENDE 02 5039
+    SYCVER 02 5540    SYNCDA 02 5634    SYNCPA 02 55f1        T0 02 547a
+        T1 02 5496        T2 02 548e     TBAUD 02 5041     TENDE 02 5039
      TFEHL 02 5060      TFPD 02 50ba      TFPP 02 509a       TGO 02 5114
      TMODE 02 5003      TNAM 02 5021       TNR 02 50d8       TOK 02 508e
       TOK1 02 5083      TOK2 02 5097    TSTART 02 5031     TSTOP 02 50f9
-      TTYP 02 5029       TY0 02 5186       TYP 00 4f0d      TYP1 02 5461
+      TTYP 02 5029       TY0 02 5186       TYP 00 4f0d      TYP1 02 5473
         VE 02 54ae       VE0 02 514b      VER1 02 5590    VERIFY 02 553e
     VERLOP 02 556a       WA0 02 56f1      WA10 02 56ec       WA6 02 56ee
        WA8 02 56ed      ZAHL 00 4f51

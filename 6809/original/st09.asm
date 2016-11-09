@@ -4,6 +4,7 @@
 * supertape fuer 6809          *********
 * autor roland wiese           *********
 * kommentare von johann klasek *********
+* fehlerkorrigiert             *********
 ****************************************
 
 * puffer fuer eingabe parameter
@@ -330,8 +331,8 @@ h5	std	1,x		; x schon vermindert
 
 ; in: nr
 ;     (ldname)..(ldende+1)
-; out: (ldstar)..(ldstar+3)	startadresse im hex-format 
-;      (ldende)..(ldende+3)	endadresse im hex-format 
+; out: (ldstar)..(ldstar+3)	startadresse im hex-format
+;      (ldende)..(ldende+3)	endadresse im hex-format
 ;      (ldende+4)		endemarke
 ; veraendert: a,b,u,x,y
 
@@ -527,9 +528,21 @@ re1	cmpx	#$00		; warte 6
 	lbsr	out		; fehler pruefsuumme
 	lbra	stop		; ende
 
+* startadresse und endadresse - - - - - - - - -
+
+re2	lda	flag		; steuerbyte
+	anda	#$04		; maskiere bit
+	cmpa	#$04		; startadresse vorgegeben?
+	bne	salt		; nein, ueberspringen
+	ldd	start		; abgefragte startadresse
+	std	ldstar		; uebernehmen
+salt	ldd	ldstar		; berechne block-
+	addd	ldlaen		; endadresse + 1
+	std	ldende
+
 * vergleiche name - - - - - - - - - - - - - - -
 
-re2	ldy	#ldname		; name von band
+	ldy	#ldname		; name von band
 	ldx	#name		; name angegeben
 n0	ldb	,x+		; hole byte angegeben
 	cmpb	#$2a		; stern (*)?
@@ -567,16 +580,6 @@ t1	lda	ldflag		; baudrate vom band einstellen
 	lda	#$80		; bit 7 gesetzt
 	sta	byte		; fuer letzten eingangsstatus
 	ldx	#$00		; fuer pruefsumme ruecksetzen
-
-	lda	flag		; steuerbyte
-	anda	#$04		; maskiere bit
-	cmpa	#$04		; startadresse vorgegeben?
-	bne	salt		; nein, ueberspringen
-	lda	start		; abgefragte startadresse
-	sta	ldstar		; uebernehmen
-salt	ldd	ldstar		; berechne block-
-	addd	ldlaen		; endadresse + 1
-	std	ldende
 
 	ldb	flag		; steuerbyte
 	andb	#$02		; modus verify/load ausmaskieren
@@ -618,7 +621,7 @@ aus	andcc	#$af		; freigabe firq+irq
 ;     ldstar			startadresse
 ;     ldende			endadresse + 1
 ; out: carry-flag		status ( 0 | 1 ... ok | fehler)
-;      (ldstar) ... (ldende)	datenbereich
+;      (ldstar) ... (ldende-1)	datenbereich
 ; veraendert: a,b,u,x,y
 
 daten	ldb	#$ff		; empfangen und einrasten:
@@ -646,7 +649,7 @@ datlop	cmpu	#$00		; warte 5
 dat	lbsr	rdbyte		; ein datenbyte
 	stb	,x+		; in den speicher
 	cmpx	ldende		; datenendadresse erreicht?
-	bls	datlop		; nein, weiterlesen
+	blo	datlop		; nein, weiterlesen
 
 	ldx	pruef		; bisherige pruefsumme
 	cmpx	#$00		; warte 4
@@ -670,7 +673,7 @@ dat1	sec			; fehler status
 ; in: baud			baudrate ($80 = 7200)
 ;     ldstar			startadresse
 ;     ldende			endadresse + 1
-;     (ldstar) ... (ldende)	datenbereich
+;     (ldstar) ... (ldende-1)	datenbereich
 ; out: carry-flag		status ( 0 | 1 ... ok | fehler)
 ; veraendert: a,b,u,x,y
 
@@ -698,7 +701,7 @@ verlop	lbsr	rdbyte		; ein datenbyte
 	cmpb	,x+		; vergleichen
 	bne	ver1		; fehlerstatus, wenn abweichung
 	cmpx	ldende		; datenendadresse erreicht?
-	bls	verlop		; nein, weiter vergleichen
+	blo	verlop		; nein, weiter vergleichen
 
 	ldx	pruef		; bisherige pruefsumme
 	lbsr	rdbyte		; low-byte pruefsumme
@@ -836,7 +839,7 @@ syncda	ldb	#$16		; sync-zeichen
 datout	ldb	,x+		; datenbyte
 	bsr	outch		; auf band
 	cmpx	ende		; ende + 1 erreicht?
-	bls	datout		; nein, weiter
+	blo	datout		; nein, weiter
 
 * sende pruefsumme datenblock - - - - - - - -
 
