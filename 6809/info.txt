@@ -29,6 +29,9 @@ original/		variations of the original implementation
   corrtypos		typos corrected, mainly in comments but also
 			in text strings for output messages.
 
+  fullcomments		full commented (added missing, extended consisting ones)
+
+
 
 
 Assembler
