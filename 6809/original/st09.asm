@@ -7,6 +7,15 @@
 * fehlerkorrigiert             *********
 ****************************************
 
+* systemtype
+syseuro   set 0
+sysdragon set 1
+syssim    set 2
+
+systype set syssim
+testsave set 0
+
+
 * puffer fuer eingabe parameter
 name	equ	$4f00	; name 12 zeichen
 punkt	equ	$4f0c	; punkt 1 zeichen
@@ -48,16 +57,100 @@ byte	equ	$4f50	; zuletzt gelesener portstatus
 zahl	equ	$4f51	; 16-bit zwischenwert (2 byte)
 baud	equ	$4f53	; aktuelle baudrate
 
+ if (systype = syseuro)
+
 * eurocom-spezifisch:
 piaac0	equ	$fcf1	; tast-port-kontrollregister
 crb	equ	$fcf3	; port-kontrollregister
-pb	equ	$fcf2	; port-darichtregister
+pb	equ	$fcf2	; port/datenrichtungs-register
 hks	equ	$f02d	; monitorprogramm
 outasc	equ	$f33d	; ausgabe ein ascii-zeichen
 in	equ	$f321	; eingabe ein ascii-zeichen
+inmask	equ	$80	; pb bit-maske eingabe
+outmask	equ	$01	; pb bit-maske ausgabe
 
 	org	$5000
 	lbra	start1
+
+ else
+ if (systype = syssim)
+
+; sim6809-spezifisch
+pb	equ	$ff20	: port/datenrichtungs-register
+crb	equ	$ff21	; port-kontrollregister
+inmask	equ	$01	; pb bit-maske eingabe
+outmask	equ	$FC	; pb bit-maske ausgabe
+
+	org	$100
+	lds 	#$100	; stack initialisieren
+
+ if (testsave = 0)
+	lbra	start1
+ else
+
+test	leax	tsave,pcr
+	ldy	#name
+	ldb	#(dsave-tsave)
+f1	lda	,x+
+	sta	,y+
+	decb
+	bne 	f1
+	lbra	on
+
+tsave	fcb "t           .bin"	; name+typ
+	fcb $01			; flag
+	fcw dsave		; start
+	fcw dsaveend-dsave	; laenge
+	fcw 0,0			; res1, res2
+	fcw dsaveend		; ende
+	
+dsave	fcb 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	fcb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+dsaveend
+
+ endif
+
+; ( -> a )
+in	pshs	b
+inwait	swi3
+	bcs	inwait
+	cmpb	#$0a		; lf -> cr
+	bne	iw1
+	ldb	#$0d
+iw1	tfr	b,a
+	bsr	outasc
+	puls	b,pc
+
+; ( a -> )
+outasc	pshs	b
+	tfr	a,b
+	swi2
+	puls	b,pc
+
+; ( -> )
+hks	sync		; monitor = simulationsende
+
+	else
+	if (systype = sysdragon)
+
+; dragon-spezifisch
+pb	equ	$ff20
+inmask	equ	$01	; pb bit-maske
+outmask	equ	$FC	; pb bit-maske ausgabe
+hks	equ	$e000	; basic
+outasc	equ	$e001	; ausgabe ein ascii-zeichen
+in	equ	$e002	; eingabe ein ascii-zeichen
+
+	org	$5000	; unter 32-kbyte-grenze
+	lbra	start1
+
+ else
+	; unbekannter typ
+	end
+ endif
+ endif
+ endif
+
 
 * ausgabe texte
 
@@ -438,9 +531,11 @@ on	orcc	#$50		; firq+irq abschalten
 	tfr	a,dp		; $4f00-$4fff
 	setdp	$4f
 
+ if (systype = syseuro)
+ endif
 	clr	crb		; pia control register port b
 				; bit 2 =0: data direction r.
-	lda	#$7f		; pb7 auf eingabe
+	lda	#~inmask	; ausgabe, eingabe bit: 1, 0
 	sta	pb		; rest auf ausgabe
 	lda	#$04		; zurueck zu port register
 	sta	crb
@@ -461,8 +556,14 @@ load	lda	#$00		; initialisierung
 	ldb	#$ff
 	ldx	#$00		; fuer pruefsumme ruecksetzen
 
-sycpar	lda	piaac0		; tastatur: pia cr port a (int flag)
+sycpar
+ if systype = syseuro
+	lda	piaac0		; tastatur: pia cr port a (int flag)
 	lbmi	aus		; bit7=1 break
+ else
+	lda	,u		; warte 5
+	lbrn	aus		; nie, warte 5
+ endif
 	nop			; warte 2+4
 	ldy	#$01
 	nop			; warte 2+4
@@ -602,6 +703,9 @@ right	ldx	#tok2		; ok ausgeben
 	lbsr	direct		; dateiinfo anzeigen
 stop	ldx	#tstop		; weitere aktion abfragen
 	lbsr	out
+ if (systype = syssim)
+	sync
+ endif
 	lbsr	in
 	cmpa	#$5b		; taste "y"?
 	lbeq	start1		; wieder zum start
@@ -740,7 +844,7 @@ rdbit	lbsr	euro1		; euro-wartezeit
 	lbsr	wa8
 	lbsr	euro1		; euro-wartezeit
 rd	lda	pb		; pegelabtastung (ta)
-	anda	#$80		; maskiere port und
+	anda	#inmask		; maskiere port und
 	cmpa	byte		; pegelvergleich mit (t0)
 	beq	rdeins		; wenn gleich, dann eins
 	sta	byte		; pegel merken
@@ -754,7 +858,7 @@ rdeins	sta	byte		; 1-bit: pegel merken
 	sec			; carry=1
 	rorb			; ins ergebnis-byte
 flanke	lda	pb		; eingang
-	anda	#$80		; maskieren
+	anda	#inmask		; maskieren
 	cmpa	byte		; flankenaenderung?
 	beq	flanke		; nein, warten
 	sta	byte		; als (t0) pegel merken
@@ -888,7 +992,7 @@ l2	ldu	#$01		; warte 30
 l3	lsrb			; bit aus datenbyte
 	bcs	eins		; 1-bit?
 	lda	pb		; 0-bit:
-	eora	#$01		; flanke erzeugen
+	eora	#outmask	; flanke erzeugen
 	sta	pb
 	lda	baud		; baudrate
 	bmi	l4		; 7200?
@@ -899,7 +1003,7 @@ l4	ldu	#$02		; warte 43 zyklen
 	lbsr	wa0
 	lbsr	euro		; euro-wartezeit
 	lda	pb		; flanke erzeugen
-	eora	#$01
+	eora	#outmask
 	sta	pb
 	leay	-1,y		; bitzaehler
 	bne	l1		; alle bits ausgegeben?
@@ -917,7 +1021,7 @@ l5	ldu	#$01		; warte 40 zyklen
 	lbsr	wa10
 	lbsr	euro		; euro-wartezeit
 	lda	pb		; flanke erzeugen
-	eora	#$01
+	eora	#outmask
 	sta	pb
 	leay	-1,y		; bitzaehler
 	bne	l1		; alle bits ausgegeben?

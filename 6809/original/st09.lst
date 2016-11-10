@@ -7,6 +7,15 @@
 4F00:                 * fehlerkorrigiert             *********
 4F00:                 ****************************************
 4F00:                 
+4F00:                 * systemtype
+4F00:                 syseuro   set 0
+4F00:                 sysdragon set 1
+4F00:                 syssim    set 2
+4F00:                 
+4F00:                 systype set syssim
+4F00:                 testsave set 0
+4F00:                 
+4F00:                 
 4F00:                 * puffer fuer eingabe parameter
 4F00:                 name    equ     $4f00   ; name 12 zeichen
 4F00:                 punkt   equ     $4f0c   ; punkt 1 zeichen
@@ -48,956 +57,1053 @@
 4F00:                 zahl    equ     $4f51   ; 16-bit zwischenwert (2 byte)
 4F00:                 baud    equ     $4f53   ; aktuelle baudrate
 4F00:                 
+4F00:                  if (systype = syseuro)
+4F00:                 
 4F00:                 * eurocom-spezifisch:
 4F00:                 piaac0  equ     $fcf1   ; tast-port-kontrollregister
 4F00:                 crb     equ     $fcf3   ; port-kontrollregister
-4F00:                 pb      equ     $fcf2   ; port-darichtregister
+4F00:                 pb      equ     $fcf2   ; port/datenrichtungs-register
 4F00:                 hks     equ     $f02d   ; monitorprogramm
 4F00:                 outasc  equ     $f33d   ; ausgabe ein ascii-zeichen
 4F00:                 in      equ     $f321   ; eingabe ein ascii-zeichen
+4F00:                 inmask  equ     $80     ; pb bit-maske eingabe
+4F00:                 outmask equ     $01     ; pb bit-maske ausgabe
 4F00:                 
 4F00:                         org     $5000
-5000: 160114                  lbra    start1
-5003:                 
-5003:                 * ausgabe texte
-5003:                 
-5003: 736176653D7320  tmode   fcc     "save=s : load=l : verify=v : "
-5020: 04                      fcb     $04
-5021: 6E616D65203A20  tnam    fcc     "name : "
-5028: 04                      fcb     $04
-5029: 74797020203A20  ttyp    fcc     "typ  : "
-5030: 04                      fcb     $04
-5031: 73746172743A20  tstart  fcc     "start: "
-5038: 04                      fcb     $04
-5039: 656E6465203A20  tende   fcc     "ende : "
-5040: 04                      fcb     $04
-5041: 62617564726174  tbaud   fcc     "baudrate 3600 = 0, 7200 = 1 : "
-505F: 04                      fcb     $04
-5060: 65696E67616265  tfehl   fcc     "eingabefehler, bitte neu eingeben!"
-5082: 04                      fcb     $04
-5083: 7265636F726420  tok1    fcc     "record on?"
-508D: 04                      fcb     $04
-508E: 6F6B3F20286372  tok     fcc     "ok? (cr)"
-5096: 04                      fcb     $04
-5097: 6F6B            tok2    fcc     "ok"
-5099: 04                      fcb     $04
-509A: 6665686C657220  tfpp    fcc     "fehler in parameterblock!      "
-50B9: 04                      fcb     $04
-50BA: 6665686C657220  tfpd    fcc     "fehler im datenblock!        "
-50D7: 04                      fcb     $04
-50D8: 6E72206E616D65  tnr     fcc     "nr name         typ start   ende"
-50F8: 04                      fcb     $04
-50F9: 736176653A6C6F  tstop   fcc     "save:load:verify? (yes=y) "
-5113: 04                      fcb     $04
-5114: 676F            tgo     fcc     "go"
-5116: 04                      fcb     $04
-5117:                 
-5117:                 ***********************************************
-5117:                 * supertape-hauptprogramm start bei $5000 - - *
-5117:                 ***********************************************
-5117:                         setdp   $00
-5117:                 
-5117: 7F4F10          start1  clr     flag
-511A: 8E3030                  ldx     #$3030          ; "00" index anfangswert
-511D: BF4F1D                  stx     nr              ; index bandverzeichnis
-5120: C604                    ldb     #4              ; 4 versuche
-5122: 8E5003          eingab  ldx     #tmode          ; aktion abfragen
-5125: 170251                  lbsr    out
-5128: 17A1F6                  lbsr    in
-512B: 8153                    cmpa    #$53            ; "s"
-512D: 2715                    beq     sv0
-512F: 814C                    cmpa    #$4c            ; "l"
-5131: 271D                    beq     ld0
-5133: 8156                    cmpa    #$56            ; "v"
-5135: 2714                    beq     ve0
-5137: 5A                      decb                    ; versuchszaehler
-5138: 102703A0                lbeq    aus             ; exit
-513C: 8E5060                  ldx     #tfehl          ; fehlermeldung
-513F: 170237                  lbsr    out             ; ausgeben
-5142: 20DE                    bra     eingab          ; naechster versuch
-5144:                 
-5144: 8601            sv0     lda     #$01            ; save-modus
-5146: B74F10                  sta     flag            ; merken
-5149: 2005                    bra     ld0             ; weiter bei load
-514B: 8602            ve0     lda     #$02            ; verify-modus
-514D: B74F10                  sta     flag
-5150: 8E5021          ld0     ldx     #tnam           ; name erfragen
-5153: 170223                  lbsr    out
-5156: 8E4F00                  ldx     #name
-5159: BF4F51                  stx     zahl            ; startzeiger
-515C: C60C                    ldb     #12             ; laenge
-515E: F74F50                  stb     byte            ; fuer prnaty
-5161: 3A                      abx
-5162: 301F                    leax    -1,x            ; start+len-1
-5164: BF4F1B                  stx     pruef           ; pufferendposition
-5167: 8E4F00                  ldx     #name           ; zielpuffer
-516A: 1700D9                  lbsr    prnaty          ; einlesen
-516D: 25E1                    bcs     ld0             ; nochmal bei fehleingabe
-516F: B64F10                  lda     flag            ; modus
-5172: 8100                    cmpa    #$00            ; load?
-5174: 2610                    bne     ty0             ; weiter mit typ bei save oder verify
-5176: 8E4F00                  ldx     #name           ; eingabepuffer
-5179: A680            ld1     lda     ,x+             ; nach
-517B: 812E                    cmpa    #$2e            ; "." absuchen
-517D: 102700AD                lbeq    ok              ; punkt gefunden, inhaltsverzeichnis!
-5181: 8C4F0B                  cmpx    #name+11        ; pufferende?
-5184: 23F3                    bls     ld1             ; weiter suchen
-5186:                                                 ; sonst...
-5186: 8E5029          ty0     ldx     #ttyp           ; typ abfragen
-5189: 1701ED                  lbsr    out
-518C: 8E4F0D                  ldx     #typ
-518F: BF4F51                  stx     zahl
-5192: C603                    ldb     #3              ; laenge
-5194: F74F50                  stb     byte            ; fuer prnaty
-5197: 3A                      abx
-5198: 301F                    leax    -1,x            ; start+len-1
-519A: BF4F1B                  stx     pruef           ; pufferendposition
-519D: 8E4F0D                  ldx     #typ            ; zielpuffer
-51A0: 1700A3                  lbsr    prnaty          ; einlesen
-51A3: 25E1                    bcs     ty0             ; nochmal bei fehleingabe
-51A5: B64F10                  lda     flag            ; modus
-51A8: 8102                    cmpa    #$02            ; verify?
-51AA: 10270080                lbeq    ok              ; dann nur einlesen
-51AE:                 
-51AE: 8E5031          st0     ldx     #tstart         ; startadresse abfragen
-51B1: 1701C5                  lbsr    out
-51B4: 17017E                  lbsr    hex0            ; hex-zahl einlesen
-51B7: 25F5                    bcs     st0             ; wiederholen bei syntaxfehler
-51B9: 10BE4F51                ldy     zahl            ; wert holen
-51BD: 10BF4F11                sty     start           ; als startadresse
-51C1: B64F10                  lda     flag            ; modus
-51C4: 8101                    cmpa    #$01            ; save?
-51C6: 270C                    beq     st2             ;
-51C8: C104                    cmpb    #4              ; leereingabe?
-51CA: 2705                    beq     st1             ; zu ok-abfrage
-51CC: 8A04                    ora     #$04            ; steuerbyte: startadr.
-51CE: B74F10                  sta     flag            ; vorgeben bei load/verify
-51D1: 16005A          st1     lbra    ok              ; ok-abfrage
-51D4: C104            st2     cmpb    #4              ; nur save: leereingabe?
-51D6: 2608                    bne     end             ; startadr. -> endadr.
-51D8: 8E5060                  ldx     #tfehl          ; startadr. leer ->
-51DB: 17019B                  lbsr    out             ; fehler
-51DE: 20CE                    bra     st0             ; neueingabe startadr.
-51E0:                 
-51E0: 8E5039          end     ldx     #tende          ; endadresse+1 abfragen
-51E3: 170193                  lbsr    out
-51E6: 17014C                  lbsr    hex0            ; hex-zahl einlesen
-51E9: 25F5                    bcs     end             ; wiederholen bei syntaxfehler
-51EB: 10BE4F51                ldy     zahl            ; wert holen
-51EF: 10BF4F19                sty     ende            ; als endadresse+1
-51F3: C104                    cmpb    #4              ; leereingabe?
-51F5: 2708                    beq     en1             ; ja, dann fehler
-51F7: BE4F11                  ldx     start
-51FA: BC4F19                  cmpx    ende            ; start < ende? (laenge=ende-start)
-51FD: 2B08                    bmi     ba0             ; ja, weiter mit baudrate
-51FF: 8E5060          en1     ldx     #tfehl          ; fehler bei eingabe
-5202: 170174                  lbsr    out
-5205: 20A7                    bra     st0             ; wieder startadr. abfragen
-5207:                 
-5207: 8E5041          ba0     ldx     #tbaud          ; baudrate abfragen
-520A: 17016C                  lbsr    out
-520D: 17A111                  lbsr    in              ; ziffer (0,1) erwartet
-5210: 840F                    anda    #$0f            ; $30/$31 -> 0/1
-5212: 2714                    beq     ok1             ; 3600 baud
-5214: 8101                    cmpa    #$01            ; 1?
-5216: 2708                    beq     ba1             ; ja, dann 7200 baud
-5218: 8E5060                  ldx     #tfehl          ; fehler bei eingabe
-521B: 17015B                  lbsr    out
-521E: 20E7                    bra     ba0             ; erneut abfragen
-5220: B64F10          ba1     lda     flag            ; bit 7 ist
-5223: 8A80                    ora     #$80            ; 7200-baud-marke
-5225: B74F10                  sta     flag
-5228:                 
-5228: 8E5083          ok1     ldx     #tok1           ; "record on?"
-522B: 17014B                  lbsr    out             ; nur bei save
-522E: 8E508E          ok      ldx     #tok            ; "ok?" bei load/verify
-5231: 170145                  lbsr    out             ; und auf
-5234: 17A0EA                  lbsr    in              ; eingabe warten
-5237: 810D                    cmpa    #$0d            ; nur wenn "cr"
-5239: 1026029F                lbne    aus             ; kein "cr", dann ende
-523D: 8E5114                  ldx     #tgo            ; sonst "go"
-5240: 170136                  lbsr    out
-5243: 160149                  lbra    on              ; zur eigentlichen aktion
-5246:                 
-5246:                 ************************************************
-5246:                 * up fuer ein-ausgabe - - - - - - - - - - - - -*
-5246:                 ************************************************
-5246:                 
-5246:                 * pruefe zulaessige eingabe- - - - - - - - - - -
-5246:                 
-5246:                 ; in: x         eingabepufferadresse
-5246:                 ;     zahl      eingabepufferadresse
-5246:                 ;     pruef     letzte pufferadresse
-5246:                 ;     byte      anzahl der zeichen (via headin)
-5246:                 ;     flag      modus
-5246:                 ; out: carry-flag  0|1 ... ok | syntaxfehler
-5246:                 ; veraendert: a,b,x
-5246:                 
-5246: 17003A          prnaty  lbsr    headin          ; eingabe in x
-5249: F64F10                  ldb     flag            ; modus
-524C: C100                    cmpb    #$00            ; bei load alles ok
-524E: 2727                    beq     praus           ; und exit
-5250:                                                 ; fuer verify+save:
-5250: BE4F51                  ldx     zahl            ; x wieder herstellen
-5253: A680            p1      lda     ,x+             ; enthaelt eingabe
-5255: 812E                    cmpa    #$2e            ; einen punkt
-5257: 2721                    beq     fhead           ; ja, fehler
-5259: BC4F1B                  cmpx    pruef           ; pufferende?
-525C: 26F5                    bne     p1              ; nein, weiterpruefen
-525E: B64F10                  lda     flag            ; modus
-5261: 8102                    cmpa    #$02            ; verify?
-5263: 2712                    beq     praus           ; ja, dann ok und exit
-5265:                                                 ; fuer save:
-5265: BE4F51                  ldx     zahl            ; x wieder herstellen
-5268: A680            p2      lda     ,x+             ; enthaelt eingabe joker?
-526A: 813F                    cmpa    #$3f            ; fragezeichen "?"?
-526C: 270C                    beq     fhead           ; fehler
-526E: 812A                    cmpa    #$2a            ; stern "*"?
-5270: 2708                    beq     fhead           ; fehler
-5272: BC4F1B                  cmpx    pruef           ; pufferende?
-5275: 26F1                    bne     p2              ; nein, weiterpruefen
-5277:                 
-5277: 1CFE            praus   clc                     ; carry=0: eingabe ok
-5279: 39                      rts
-527A:                 
-527A: 8E5060          fhead   ldx     #tfehl          ; fehlermeldung
-527D: 1700F9                  lbsr    out             ; ausgeben und
-5280: 1A01                    sec                     ; carry=1: eingabefehler
-5282: 39                      rts
-5283:                 
-5283:                 * lese ascii-zeichen - - - - - - - - - -  - - - -
-5283:                 
-5283:                 ; in: x         pufferadresse
-5283:                 ;     zahl      pufferadresse
-5283:                 ;     byte      anzahl der zeichen
-5283:                 ;     pruef     letzte pufferadresse
-5283:                 ; out: (x)      eingelesene zeichen
-5283:                 ; veraendert: a,b,x,y
-5283:                 
-5283: 17A09B          headin  lbsr    in              ; zeichen einlesen
-5286: 810D                    cmpa    #$0d            ; zeilenende (cr)?
-5288: 2719                    beq     heaaus          ; fertig
-528A: F14F50                  cmpb    byte            ; laengen-counter
-528D: 260F                    bne     head11          ; am start?
-528F: 108E2020                ldy     #$2020          ; 2 leerzeichen
-5293: 10AF80          head12  sty     ,x+             ; 2 bytes löschen
-5296: BC4F1B                  cmpx    pruef           ; letztes pufferbyte erreicht?
-5299: 26F8                    bne     head12          ; weiter mit padding
-529B: BE4F51                  ldx     zahl            ; wieder zum pufferstart
-529E: A780            head11  sta     ,x+             ; eingelesenes zeichen speichern
-52A0: 5A                      decb                    ; anzahl herunterzaehlen
-52A1: 26E0                    bne     headin          ; bei 0 fertig
-52A3: 39              heaaus  rts
-52A4:                 
-52A4:                 * change hex in ascii - - - - - - - - - - - - - -
-52A4:                 
-52A4:                 ; in: x,(x)     adresse auf 16-bit-wert
-52A4:                 ; out: (x)      4 bytes mit hex-darstellung
-52A4:                 ; veraendert: a,b,u,x,y
-52A4:                 
-52A4: CE0002          hexasc  ldu     #2              ; 2 hex-bytes
-52A7: 108E0004        hexas   ldy     #4              ; bit-zaehler
-52AB: 8600                    lda     #0              ; zu
-52AD: E601                    ldb     1,x             ; low-byte
-52AF: 58              h1      aslb                    ; oberes
-52B0: 49                      rola                    ; nibble in a
-52B1: 313F                    leay    -1,y            ; bit-counter
-52B3: 26FA                    bne     h1              ; alle 4 bits?
-52B5:                 
-52B5: 108E0004                ldy     #4              ; 4 mal
-52B9: 54              h2      lsrb                    ; b wieder zurueck
-52BA: 313F                    leay    -1,y            ; schieben
-52BC: 26FB                    bne     h2
-52BE:                 
-52BE: 8109                    cmpa    #$09            ; a in hex-ziffer
-52C0: 2F02                    ble     h3              ; 0-9?
-52C2: 8B07                    adda    #7              ; "a"-"f"
-52C4: 8B30            h3      adda    #$30            ; ascii-zeichen
-52C6: C109                    cmpb    #$09            ; b in hex-ziffer
-52C8: 2F02                    ble     h4              ; 0-9?
-52CA: CB07                    addb    #7              ; "a"-"f"
-52CC: CB30            h4      addb    #$30            ; ascii-zeichen
-52CE: 335F                    leau    -1,u            ; byte-zaehler
-52D0: 11830000                cmpu    #0              ; alle bytes?
-52D4: 2706                    beq     h5              ; fertig
-52D6: ED02                    std     2,x             ; 2 hex-ziffern ablegen
-52D8: 301F                    leax    -1,x            ; zum high-byte
-52DA: 20CB                    bra     hexas
-52DC: ED01            h5      std     1,x             ; x schon vermindert
-52DE:                                                 ; korrigiert, 2 hex-ziffern
-52DE: 39                      rts                     ; statt wert ablegen
-52DF:                 
-52DF:                 * dokumentiere auf bildschirm - - - - - - - - - -
-52DF:                 
-52DF:                 ; in: nr
-52DF:                 ;     (ldname)..(ldende+1)
-52DF:                 ; out: (ldstar)..(ldstar+3)     startadresse im hex-format
-52DF:                 ;      (ldende)..(ldende+3)     endadresse im hex-format
-52DF:                 ;      (ldende+4)               endemarke
-52DF:                 ; veraendert: a,b,u,x,y
-52DF:                 
-52DF: BE4F1D          direct  ldx     nr              ; bandindex als ascii-nummer
-52E2: 8C3030                  cmpx    #$3030          ; "00"?
-52E5: 2606                    bne     d0              ; nein, dann tabellenzeile
-52E7: 8E50D8                  ldx     #tnr            ; tabellenkopf ausgeben
-52EA: 17008C                  lbsr    out
-52ED: FC4F1D          d0      ldd     nr              ; bandindex
-52F0: 10833939                cmpd    #$3939          ; = "99"
-52F4: 2606                    bne     d1
-52F6: CC3030                  ldd     #$3030          ; ueberrollen auf "00"
-52F9: FD4F1D                  std     nr
-52FC: C139            d1      cmpb    #$39            ; einerstelle
-52FE: 2604                    bne     d2              ; ="9" (ueberlauf)?
-5300: 8B01                    adda    #$01            ; zehnerstelle +1
-5302: C62F                    ldb     #$2f            ; "0"-1
-5304: CB01            d2      addb    #$01            ; einerstelle +1
-5306: FD4F1D                  std     nr              ; neuen wert speichern
-5309: 8E4F31                  ldx     #ldstar         ; startadresse nach hex
-530C: 17FF95                  lbsr    hexasc          ; ueberschreibt ldlaen
-530F: 8E4F39                  ldx     #ldende         ; endadresse nach hex
-5312: 17FF8F                  lbsr    hexasc          ; ueberschreibt 2 folgebytes
-5315: 8620                    lda     #$20            ; statt punkt ein leerzeichen
-5317: B74F2C                  sta     ldpunk
-531A: B74F30                  sta     ldflag          ; steuerbyte auch als leerzeichen
-531D: B74F1F                  sta     nr+2
-5320: 8E2020                  ldx     #$2020          ; reserviert sicherheitshalber
-5323: BF4F35                  stx     ldres1          ; mit leerzeichen fuellen
-5326: BF4F37                  stx     ldres2
-5329: 8604                    lda     #$04            ; ausgabeendemarkierung
-532B: B74F3D                  sta     ldende+4
-532E: 8E4F1D                  ldx     #nr             ; ausgabestart 
-5331: 170045                  lbsr    out             ; von nr bis ldende+3 ausgeben
-5334: 39                      rts
-5335:                 
-5335:                 * change ascii in hex - - - - - - - - - - - - -
-5335:                 
-5335:                 ; in: zahl      adresse auf 16-bit-wert
-5335:                 ; out: (zahl)           16-bit-wert
-5335:                 ;      b                (4 - anzahl der ziffern), 4 ... leereingabe
-5335:                 ;      carry-flag       0|1 ... ok | syntaxfehler
-5335:                 ; veraendert: a,b,u,y,x (via out)
-5335:                 
-5335: CE0000          hex0    ldu     #0              ; ergebnis register
-5338: FF4F51                  stu     zahl            ; mit 0 initialisieren
-533B: C604                    ldb     #4              ; max. 4 zeichen
-533D: 179FE1          hex     lbsr    in              ; zeichen von tastatur
-5340: 810D                    cmpa    #$0d            ; eingabeende mit return
-5342: 272B                    beq     hexaus          ; ende
-5344: 8130                    cmpa    #$30            ; < '0'
-5346: 2B28                    bmi     hexf            ; ja, dann fehler
-5348: 8139                    cmpa    #$39            ; <= '9'
-534A: 2F0A                    ble     in1             ; ja, dann gut ziffer
-534C: 8141                    cmpa    #$41            ; < 'a'
-534E: 2B20                    bmi     hexf            ; ja, dann fehler
-5350: 8146                    cmpa    #$46            ; > 'f'
-5352: 2E1C                    bgt     hexf            ; ja, dann fehler
-5354: 8007                    suba    #7              ; a-f-korrektur
-5356: 840F            in1     anda    #$0f            ; ascii-bits ausblenden
-5358:                 
-5358: 108E0004                ldy     #4              ; bit-zaehler
-535C: 784F52          hex1    asl     zahl+1          ; vorlaeufiges ergebnis
-535F: 794F51                  rol     zahl            ; insgesamt: * 16
-5362: 313F                    leay    -1,y            ; alle bits?
-5364: 26F6                    bne hex1                ; weiter
-5366: BA4F52                  ora     zahl+1          ; wert neu eingelesene
-5369: B74F52                  sta     zahl+1          ; ziffer dazu
-536C: 5A                      decb                    ; hex-ziffern-zaehler
-536D: 26CE                    bne     hex             ; maximalanzahl erreicht
-536F: 39              hexaus  rts                     ; ok: carry implizit = 0
-5370:                 
-5370: 8E5060          hexf    ldx     #tfehl          ; fehler in hex-zahl
-5373: 170003                  lbsr    out
-5376: 1A01                    sec                     ; fehler: carry = 1
-5378: 39                      rts
-5379:                 
-5379:                 * standard ausgabe cr+lf+text - - - - - -
-5379:                 
-5379:                 ; in: x         adresse auf zeichenkette
-5379:                 ;     (x)       zeichenkette
-5379:                 ; out: -
-5379:                 ; veraendert: a,x
-5379:                 
-5379: 860D            out     lda     #$0d            ; "cr"
-537B: 179FBF                  lbsr    outasc          ; ausgeben
-537E: 860A                    lda     #$0a            ; "lf"
-5380: 179FBA                  lbsr    outasc          ; ausgeben
-5383: A680            out2    lda     ,x+             ; zeichen
-5385: 8104                    cmpa    #$04            ; endemarkierung?
-5387: 2705                    beq     out1            ; ja, fertig
-5389: 179FB1                  lbsr    outasc          ; sonst ausgeben
-538C: 20F5                    bra     out2            ; weiter
-538E: 39              out1    rts
-538F:                 
-538F:                 * eingabe ende - - - - - - -- - - - - - -
-538F:                 
-538F:                 ; ab hier keine betriebssystemroutinen mehr, daher
-538F:                 ; jetzt interrupts aus und directpage angepasst.
-538F:                 
-538F: 1A50            on      orcc    #$50            ; firq+irq abschalten
-5391: 864F                    lda     #$4f            ; directpage setzen auf
-5393: 1F8B                    tfr     a,dp            ; $4f00-$4fff
-5395:                         setdp   $4f
-5395:                 
-5395: 7FFCF3                  clr     crb             ; pia control register port b
-5398:                                                 ; bit 2 =0: data direction r.
-5398: 867F                    lda     #$7f            ; pb7 auf eingabe
-539A: B7FCF2                  sta     pb              ; rest auf ausgabe
-539D: 8604                    lda     #$04            ; zurueck zu port register
-539F: B7FCF3                  sta     crb
-53A2:                 
-53A2: 9610                    lda     flag            ; lade steuerbyte
-53A4: 8401                    anda    #$01            ; isoliere modus
-53A6: 8101                    cmpa    #$01            ; save?
-53A8: 10270234                lbeq    save            ; andernfalls load oder verify
-53AC:                 
-53AC:                 ***********************************************
-53AC:                 * load supertape - -hp 28 zyklen - - - - - - -*
-53AC:                 ***********************************************
-53AC:                 
-53AC: 8600            load    lda     #$00            ; initialisierung
-53AE: 9753                    sta     baud            ; 3600 baud
-53B0: 8680                    lda     #$80            ; bit 7 gesetzt
-53B2: 9750                    sta     byte            ; fuer letzten eingangsstatus
-53B4: C6FF                    ldb     #$ff
-53B6: 8E0000                  ldx     #$00            ; fuer pruefsumme ruecksetzen
-53B9:                 
-53B9: B6FCF1          sycpar  lda     piaac0          ; tastatur: pia cr port a (int flag)
-53BC: 102B011C                lbmi    aus             ; bit7=1 break
-53C0: 12                      nop                     ; warte 2+4
-53C1: 108E0001                ldy     #$01
-53C5: 12                      nop                     ; warte 2+4
-53C6: 108E0001                ldy     #$01            ; bitzaehler = 1
-53CA: 1701D5                  lbsr    rdbit           ; empfange 1 bit (in b)
-53CD: C116                    cmpb    #$16            ; sync erkannt?
-53CF: 26E8                    bne     sycpar          ; weiter synchronisieren
-53D1:                 
-53D1: 119353          sycp    cmpu    baud            ; warte 14
-53D4: 119353                  cmpu    baud
-53D7: 1701B9                  lbsr    rdbyte          ; empfange 1 byte
-53DA: C116                    cmpb    #$16            ; noch sync-zeichen?
-53DC: 27F3                    beq     sycp            ; ja, weiter alle lesen
-53DE:                 
-53DE: C12A                    cmpb    #$2a            ; startbyte parameterblock?
-53E0: 26CA                    bne     load            ; nein, dann naechsten block
-53E2: 9F1B                    stx     pruef           ; pruefsumme zuruecksetzen
-53E4:                 
-53E4:                 * empfange parameter - - - - - - - - - - - - -
-53E4:                 * name, typ, flag    - - - - - - - - - - - - -
-53E4:                 
-53E4: 8E4F20                  ldx     #ldname         ; zielpuffer
-53E7: 12              pantf   nop                     ; warte 2
-53E8: 1701A8                  lbsr    rdbyte          ; ein parameterbyte
-53EB: E780                    stb     ,x+             ; in den puffer
-53ED: 11830000                cmpu    #$00            ; warte 5
-53F1: 8C4F30                  cmpx    #ldflag         ; name+flag fertig?
-53F4: 23F1                    bls     pantf           ; nein, weiter einlesen
-53F6: 2006                    bra     par             ; sonst zweiten teil
-53F8:                 
-53F8:                 * empfange restliche parameter - - - - - - -
-53F8:                 
-53F8: CE0000          parest  ldu     #$00            ; warte 6
-53FB: CE0000                  ldu     #$00
-53FE:                                                 ; zweiter teil mit 16-bit-werten
-53FE: 170192          par     lbsr    rdbyte          ; empfange low-byte
-5401: E701                    stb     1,x             ; big-endian an hoeherer adresse
-5403: 3D                      mul                     ; warte 15
-5404: 8C0000                  cmpx    #$00
-5407: 170189                  lbsr    rdbyte          ; empfange high-byte
-540A: E781                    stb     ,x++            ; big-endian an niedrige adresse
-540C: 8C4F37                  cmpx    #ldres2         ; parameterblockende?
-540F: 23E7                    bls     parest          ; nein, weiter einlesen
-5411:                 
-5411:                 * empfange pruefsumme parameter - - - - - - -
-5411:                 
-5411: 9E1B                    ldx     pruef           ; bisherige pruefsumme
-5413: 12                      nop                     ; warte 2
-5414: 17017C                  lbsr    rdbyte          ; low-byte pruefsumme
-5417: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
-5419: D11C                    cmpb    pruef+1         ; pruefsumme-low vergleichen
-541B: 10270009                lbeq    re1             ; wenn gleich weiter
-541F: 8E509A                  ldx     #tfpp           ; nicht gleich! fehler
-5422: 17FF54                  lbsr    out             ; fehler pruefsumme
-5425: 1600A5                  lbra    stop            ; ende
-5428: 8C0000          re1     cmpx    #$00            ; warte 6
-542B: 12                      nop
-542C: 170164                  lbsr    rdbyte          ; high-byte pruefsumme
-542F: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
-5431: D11B                    cmpb    pruef           ; pruefsumme-high vergleichen
-5433: 2709                    beq     re2             ; wenn gleich weiter
-5435: 8E509A                  ldx     #tfpp           ; nicht gleich! fehler
-5438: 17FF3E                  lbsr    out             ; fehler pruefsuumme
-543B: 16008F                  lbra    stop            ; ende
-543E:                 
-543E:                 * startadresse und endadresse - - - - - - - - -
-543E:                 
-543E: 9610            re2     lda     flag            ; steuerbyte
-5440: 8404                    anda    #$04            ; maskiere bit
-5442: 8104                    cmpa    #$04            ; startadresse vorgegeben?
-5444: 2604                    bne     salt            ; nein, ueberspringen
-5446: DC11                    ldd     start           ; abgefragte startadresse
-5448: DD31                    std     ldstar          ; uebernehmen
-544A: DC31            salt    ldd     ldstar          ; berechne block-
-544C: D333                    addd    ldlaen          ; endadresse + 1
-544E: DD39                    std     ldende
-5450:                 
-5450:                 * vergleiche name - - - - - - - - - - - - - - -
-5450:                 
-5450: 108E4F20                ldy     #ldname         ; name von band
-5454: 8E4F00                  ldx     #name           ; name angegeben
-5457: E680            n0      ldb     ,x+             ; hole byte angegeben
-5459: C12A                    cmpb    #$2a            ; stern (*)?
-545B: 2716                    beq     typ1            ; ja, dann weiter mit typ
-545D: C13F                    cmpb    #$3f            ; fragezeichen (?)?
-545F: 270A                    beq     n1              ; ja, naechstes zeichen
-5461: E1A4                    cmpb    ,y              ; gleich bandname?
-5463: 2706                    beq     n1              ; ja, naechstes zeichen
-5465: 17FE77                  lbsr    direct          ; nicht gleich, dann parameter zeigen
-5468: 16FF41                  lbra    load            ; naechster versuch
-546B: 3121            n1      leay    1,y             ; weiter im bandnamen
-546D: 108C4F2B                cmpy    #ldname+11      ; fertig?
-5471: 23E4                    bls     n0              ; nein, weiter vergleichen
-5473:                 
-5473:                 * vergleiche typ - - - - - - - - - - - - - - - -
-5473:                 
-5473: 108E4F2D        typ1    ldy     #ldtyp          ; typ vom band
-5477: 8E4F0D                  ldx     #typ            ; typ angegeben
-547A: E680            t0      ldb     ,x+             ; hole byte angegeben
-547C: C12A                    cmpb    #$2a            ; stern (*)?
-547E: 2716                    beq     t1              ; ja, dann datei gefunden!
-5480: C13F                    cmpb    #$3f            ; fragezeichen (?)?
-5482: 270A                    beq     t2              ; ja, naechstes zeichen
-5484: E1A4                    cmpb    ,y              ; gleich bandtyp?
-5486: 2706                    beq     t2              ; falscher typ?
-5488: 17FE54                  lbsr    direct          ; nicht gleich, dann parameter zeigen
-548B: 16FF1E                  lbra    load            ; naechster versuch
-548E: 3121            t2      leay    1,y             ; weiter im bandtyp
-5490: 108C4F2F                cmpy    #ldtyp+2        ; fertig?
-5494: 23E4                    bls     t0              ; nein, weiter vergleichen
-5496:                 
-5496: 9630            t1      lda     ldflag          ; baudrate vom band einstellen
-5498: 9753                    sta     baud            ; fuer den datenblock
-549A:                 
-549A: 8680                    lda     #$80            ; bit 7 gesetzt
-549C: 9750                    sta     byte            ; fuer letzten eingangsstatus
-549E: 8E0000                  ldx     #$00            ; fuer pruefsumme ruecksetzen
-54A1:                 
-54A1: D610                    ldb     flag            ; steuerbyte
-54A3: C402                    andb    #$02            ; modus verify/load ausmaskieren
-54A5: C102                    cmpb    #$02            ; verify?
-54A7: 2705                    beq     ve              ; ja
-54A9: 170036                  lbsr    daten           ; datenblock laden
-54AC: 2003                    bra     chek            ; pruefsumme kontrollieren
-54AE: 17008D          ve      lbsr    verify          ; datenblock verifizieren
-54B1:                 
-54B1: 2409            chek    bcc     right           ; laden/verify ok
-54B3: 8E50BA                  ldx     #tfpd           ; fehler im datenblock!
-54B6: 17FEC0                  lbsr    out
-54B9: 160011                  lbra    stop            ; ende
-54BC: 8E5097          right   ldx     #tok2           ; ok ausgeben
-54BF: 17FEB7                  lbsr    out
-54C2: D610                    ldb     flag            ; steuerbyte
-54C4: C403                    andb    #$03            ; modus ausmaskieren
-54C6: C100                    cmpb    #$00            ; load?
-54C8: 2603                    bne     stop            ; ende bei save und verify
-54CA: 17FE12                  lbsr    direct          ; dateiinfo anzeigen
-54CD: 8E50F9          stop    ldx     #tstop          ; weitere aktion abfragen
-54D0: 17FEA6                  lbsr    out
-54D3: 179E4B                  lbsr    in
-54D6: 815B                    cmpa    #$5b            ; taste "y"?
-54D8: 1027FC3B                lbeq    start1          ; wieder zum start
-54DC:                 
-54DC: 1CAF            aus     andcc   #$af            ; freigabe firq+irq
-54DE: 7EF02D                  jmp     hks             ; ins monitorprogramm (muss dp
-54E1:                                                 ; wieder festlegen!)
-54E1: 12                      nop                     ; nicht verwendet
-54E2:                 
-54E2:                 ***********************************************
-54E2:                 * hp-load-ende - - - - - - - - - - - - - - - -*
-54E2:                 ***********************************************
-54E2:                 
-54E2:                 * up daten - - - - - - - - - - - - - - - - - -
-54E2:                 
-54E2:                 ; in: baud                      baudrate ($80 = 7200)
-54E2:                 ;     ldstar                    startadresse
-54E2:                 ;     ldende                    endadresse + 1
-54E2:                 ; out: carry-flag               status ( 0 | 1 ... ok | fehler)
-54E2:                 ;      (ldstar) ... (ldende-1)  datenbereich
-54E2:                 ; veraendert: a,b,u,x,y
-54E2:                 
-54E2: C6FF            daten   ldb     #$ff            ; empfangen und einrasten:
-54E4: 119353          sycdar  cmpu    baud            ; warte 14
-54E7: 119353                  cmpu    baud
-54EA: 108E0001                ldy     #$01            ; warte 8
-54EE: 108E0001                ldy     #$01            ; dabei bitzaehler = 1
-54F2: 1700AD                  lbsr    rdbit           ; empfange 1 bit (in b)
-54F5: C116                    cmpb    #$16            ; sync erkannt?
-54F7: 26EB                    bne     sycdar          ; weiter synchronisieren
-54F9:                 
-54F9: 119353          sycd    cmpu    baud            ; warte 14
-54FC: 119353                  cmpu    baud
-54FF: 170091                  lbsr    rdbyte          ; empfange 1 byte
-5502: C116                    cmpb    #$16            ; noch sync-zeichen?
-5504: 27F3                    beq     sycd            ; ja, weiter alle lesen
-5506:                 
-5506: C1C5                    cmpb    #$c5            ; startbyte datenblock?
-5508: 2631                    bne     dat1            ; nein, dann fehlerstatus melden
-550A: 9F1B                    stx     pruef           ; pruefsumme zuruecksetzen
-550C:                 
-550C: 9E31                    ldx     ldstar          ; startadresse als datenziel
-550E: 2004                    bra     dat
-5510: 11830000        datlop  cmpu    #$00            ; warte 5
-5514: 17007C          dat     lbsr    rdbyte          ; ein datenbyte
-5517: E780                    stb     ,x+             ; in den speicher
-5519: 9C39                    cmpx    ldende          ; datenendadresse erreicht?
-551B: 25F3                    blo     datlop          ; nein, weiterlesen
-551D:                 
-551D: 9E1B                    ldx     pruef           ; bisherige pruefsumme
-551F: 8C0000                  cmpx    #$00            ; warte 4
-5522: 17006E                  lbsr    rdbyte          ; low-byte pruefsumme
-5525: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
-5527: D11C                    cmpb    pruef+1         ; pruefsumme-low vergleichen
-5529: 2610                    bne     dat1            ; fehlerstatus retour
-552B: 8C0000                  cmpx    #$00            ; warte 6
-552E: 12                      nop
-552F: 170061                  lbsr    rdbyte          ; high-byte pruefsumme
-5532: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
-5534: D11B                    cmpb    pruef           ; pruefsumme-high vergleichen
-5536: 2603                    bne     dat1            ; fehlerstatus retour
-5538: 1CFE                    clc                     ; ok status
-553A: 39                      rts                     ; zurueck
-553B: 1A01            dat1    sec                     ; fehler status
-553D: 39                      rts                     ; zurueck
-553E:                 
-553E:                 * up verify - - - - - - - - - - - - - - - - - -
-553E:                 
-553E:                 ; in: baud                      baudrate ($80 = 7200)
-553E:                 ;     ldstar                    startadresse
-553E:                 ;     ldende                    endadresse + 1
-553E:                 ;     (ldstar) ... (ldende-1)   datenbereich
-553E:                 ; out: carry-flag               status ( 0 | 1 ... ok | fehler)
-553E:                 ; veraendert: a,b,u,x,y
-553E:                 
-553E: C6FF            verify  ldb     #$ff            ; empfangen und einrasten:
-5540: 119353          sycver  cmpu    baud            ; warte 14
-5543: 119353                  cmpu    baud
-5546: 108E0001                ldy     #$01            ; warte 8
-554A: 108E0001                ldy     #$01            ; dabei bitzaehler = 1
-554E: 170051                  lbsr    rdbit           ; empfange 1 bit (in b)
-5551: C116                    cmpb    #$16            ; sync erkannt?
-5553: 26EB                    bne     sycver          ; weiter synchronisieren
-5555:                 
-5555: 119353          sycv    cmpu    baud            ; warte 14
-5558: 119353                  cmpu    baud
-555B: 170035                  lbsr    rdbyte          ; empfange 1 byte
-555E: C116                    cmpb    #$16            ; noch sync-zeichen?
-5560: 27F3                    beq     sycv            ; ja, weiter alle lesen
-5562:                 
-5562: C1C5                    cmpb    #$c5            ; startbyte datenblock?
-5564: 262A                    bne     ver1            ; nein, dann fehlerstatus melden
-5566: 9F1B                    stx     pruef           ; pruefsumme zuruecksetzen
-5568:                 
-5568: 9E31                    ldx     ldstar          ; startadresse als datenziel
-556A: 170026          verlop  lbsr    rdbyte          ; ein datenbyte
-556D: E180                    cmpb    ,x+             ; vergleichen
-556F: 261F                    bne     ver1            ; fehlerstatus, wenn abweichung
-5571: 9C39                    cmpx    ldende          ; datenendadresse erreicht?
-5573: 25F5                    blo     verlop          ; nein, weiter vergleichen
-5575:                 
-5575: 9E1B                    ldx     pruef           ; bisherige pruefsumme
-5577: 170019                  lbsr    rdbyte          ; low-byte pruefsumme
-557A: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
-557C: D11C                    cmpb    pruef+1         ; pruefsumme-low vergleichen
-557E: 2610                    bne     ver1            ; fehlerstatus retour
-5580: 8C0000                  cmpx    #$00            ; warte 6
-5583: 12                      nop
-5584: 17000C                  lbsr    rdbyte          ; high-byte pruefsumme
-5587: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
-5589: D11B                    cmpb    pruef           ; pruefsumme-high vergleichen
-558B: 2603                    bne     ver1            ; fehlerstatus retour
-558D: 1CFE                    clc                     ; ok status
-558F: 39                      rts                     ; zurueck
-5590: 1A01            ver1    sec                     ; fehler status
-5592: 39                      rts                     ; zurueck
-5593:                 
-5593:                 * up rdbyte ,rdbit - - - - - - - - - - - - - - - - -
-5593:                 
-5593:                 ; in: y         bitzaehler (1 oder 8)
-5593:                 ;     baud      baudrate ( $00 | $80 ... 3600 | 7200 )
-5593:                 ;     byte      pegel beim bitanfang (vom letzten aufruf)
-5593:                 ; out: b        eingelesene bits
-5593:                 ; veraendert: a,b,u,y
-5593:                 
-5593: 108E0008        rdbyte  ldy     #$08            ; bitzaehler=8
-5597: 2009                    bra     rdbit           ; byte-einstieg
-5599: CE0001          read    ldu     #$01            ; warte 41
-559C: CE0001                  ldu     #$01            ; bitwartezeit
-559F: 17014B                  lbsr    wa8
-55A2: 170155          rdbit   lbsr    euro1           ; euro-wartezeit
-55A5: 9653                    lda     baud            ; baudrate
-55A7: 2B0C                    bmi     rd              ; verzweige bei 7200
-55A9: CE0005                  ldu     #$05            ; warte 93
-55AC: CE0005                  ldu     #$05            ; bei 3600
-55AF: 17013B                  lbsr    wa8
-55B2: 170145                  lbsr    euro1           ; euro-wartezeit
-55B5: B6FCF2          rd      lda     pb              ; pegelabtastung (ta)
-55B8: 8480                    anda    #$80            ; maskiere port und
-55BA: 9150                    cmpa    byte            ; pegelvergleich mit (t0)
-55BC: 2707                    beq     rdeins          ; wenn gleich, dann eins
-55BE: 9750                    sta     byte            ; pegel merken
-55C0: 1CFE                    clc                     ; 0-bit carry=0
-55C2: 56                      rorb                    ; ergebnis-byte
-55C3: 200B                    bra     flanke          ; warte auf flanke
-55C5: 9750            rdeins  sta     byte            ; 1-bit: pegel merken
-55C7: DE1B                    ldu     pruef           ; pruefsumme
-55C9: 3341                    leau    1,u             ; erhoehen
-55CB: DF1B                    stu     pruef
-55CD: 1A01                    sec                     ; carry=1
-55CF: 56                      rorb                    ; ins ergebnis-byte
-55D0: B6FCF2          flanke  lda     pb              ; eingang
-55D3: 8480                    anda    #$80            ; maskieren
-55D5: 9150                    cmpa    byte            ; flankenaenderung?
-55D7: 27F7                    beq     flanke          ; nein, warten
-55D9: 9750                    sta     byte            ; als (t0) pegel merken
-55DB: 313F                    leay    -1,y            ; bitzaehler
-55DD: 26BA                    bne     read            ; alle bits empfangen?
-55DF: 39                      rts
-55E0:                 
-55E0:                 ************************************************
-55E0:                 * save supertape- - hp 21 zyklen - - - - - - - *
-55E0:                 ************************************************
-55E0:                 
-55E0: 0F53            save    clr     baud            ; 3600 baud einstellen
-55E2:                 
-55E2: DC19                    ldd     ende            ; endadresse + 1
-55E4: 9311                    subd    start           ; minus startadresse
-55E6: DD13                    std     laeng           ; ergibt datenblocklaenge
-55E8:                 
-55E8: 9610                    lda     flag            ; steuerbyte
-55EA: 8480                    anda    #$80            ; baudrate maskieren
-55EC: 9710                    sta     flag
-55EE:                 
-55EE:                 * sync-zeichen fuer parameter - - - - - - - - -
-55EE:                 
-55EE: 8E0040                  ldx     #$40            ; zaehler fuer 64 sync
-55F1: C616            syncpa  ldb     #$16            ; sync-zeichen
-55F3: 170070                  lbsr    outch           ; sende sync-zeichen
-55F6: 12                      nop
-55F7: 301F                    leax    -1,x            ; sync-zaehler -1
-55F9: 26F6                    bne     syncpa          ; alle zeichen ausgegeben?
-55FB:                 
-55FB: C62A                    ldb     #$2a            ; startbyte parameterblock
-55FD: 8D67                    bsr     outch           ; senden
-55FF:                 
-55FF: 9F1B                    stx     pruef           ; pruefsumme=0
-5601:                 
-5601:                 * sende parameterblock - - - - - - - - - - - -
-5601:                 
-5601: 8E4F00                  ldx     #name           ; parameterblock pufferstart
-5604: E680            parout  ldb     ,x+             ; parameter-byte
-5606: 8D5E                    bsr     outch           ; auf band
-5608: 8C4F10                  cmpx    #flag           ; name+flag ausgegeben?
-560B: 23F7                    bls     parout          ; nein, weiter
-560D:                 
-560D: 12              poutr   nop                     ; restliche 16-bit-parameter
-560E: E601                    ldb     1,x             ; in little-endian!
-5610: 8D54                    bsr     outch           ; low-byte
-5612: 119353                  cmpu    baud            ; warte 7
-5615: E681                    ldb     ,x++            ; high und zeiger+2
-5617: 8D4D                    bsr     outch           ; high-byte
-5619: 8C4F17                  cmpx    #res2           ; parameterblock fertig?
-561C: 23EF                    bls     poutr           ; nein, dann weiter
-561E:                 
-561E:                 * sende pruefsumme des parameterblocks - - - -
-561E:                 
-561E: 9E1B                    ldx     pruef           ; rette pruefsumme
-5620: D61C                    ldb     pruef+1         ; pruefsumme low-byte
-5622: 8D42                    bsr     outch           ; auf band
-5624: 9F1B                    stx     pruef           ; gerettete pruefsumme
-5626: 9F1B                    stx     pruef           ; warte 5
-5628: D61B                    ldb     pruef           ; pruefsumme high-byte
-562A: 8D3A                    bsr     outch           ; auf band
-562C: 12                      nop                     ; warte 2
-562D: 9610                    lda     flag            ; angegebene baudrate
-562F: 9753                    sta     baud            ; einstellen fuer datenblock
-5631:                 
-5631:                 * sende sync-zeichen des datenblocks - - - - - -
-5631:                 
-5631: 8E0040                  ldx     #$40            ; 64 sync-zeichen
-5634: C616            syncda  ldb     #$16            ; sync-zeichen
-5636: 17002D                  lbsr    outch           ; auf band
-5639: 12                      nop                     ; warte 2
-563A: 301F                    leax    -1,x            ; zeichenzaehler
-563C: 26F6                    bne     syncda          ; alle gesendet?
-563E:                 
-563E: C6C5                    ldb     #$c5            ; startbyte datenblock
-5640: 8D24                    bsr     outch           ; auf band
-5642: 9F1B                    stx     pruef           ; pruefsumme=0
-5644:                 
-5644:                 * sende datenblock - - - - - - - - - - - - - -
-5644:                 
-5644: 9E11                    ldx     start           ; startadresse datenblock
-5646: E680            datout  ldb     ,x+             ; datenbyte
-5648: 8D1C                    bsr     outch           ; auf band
-564A: 9C19                    cmpx    ende            ; ende + 1 erreicht?
-564C: 25F8                    blo     datout          ; nein, weiter
-564E:                 
-564E:                 * sende pruefsumme datenblock - - - - - - - -
-564E:                 
-564E: 9E1B                    ldx     pruef           ; rette pruefsumme
-5650: D61C                    ldb     pruef+1         ; pruefsumme low-byte
-5652: 8D12                    bsr     outch           ; auf band
-5654: 9F1B                    stx     pruef           ; gerettete pruefsumme
-5656: 9F1B                    stx     pruef           ; warte 5
-5658: D61B                    ldb     pruef           ; pruefsumme high-byte
-565A: 8D0A                    bsr     outch           ; auf band
-565C:                 
-565C: 7FFCF2                  clr     pb              ; port löschen
-565F: 8601                    lda     #$01            ; steuerbyte
-5661: 9710                    sta     flag            ; auf save-modus
-5663:                 
-5663: 16FE56                  lbra    right           ; ok ausgeben und ende
-5666:                 
-5666:                 **********************************************
-5666:                 * ende  hp-save - - - - - - - - - - - - - - -*
-5666:                 **********************************************
-5666:                 
-5666:                 * up fuer save - - - - - - - - - - - - - - - -
-5666:                 
-5666:                 ; in: b         auszugebendes byte
-5666:                 ;     baud      baudrate ( $00 | $80 ... 3600 | 7200)
-5666:                 ; out: -
-5666:                 ; veraendert: a,b,u,y
-5666:                 
-5666: 108E0008        outch   ldy     #$08            ; bit-zaehler
-566A: 170099                  lbsr    euro            ; euro-wartezeit
-566D: 9653                    lda     baud            ; baudrate
-566F: 2B24                    bmi     l3              ; 7200?
-5671: CE0003                  ldu     #$03            ; 3600: warte 59 zyklen
-5674: CE0003                  ldu     #$03
-5677: 170077                  lbsr    wa0
-567A: 170089                  lbsr    euro            ; euro-wartezeit
-567D: 2016                    bra     l3              ; byte-einstieg
-567F: 9653            l1      lda     baud            ; bit-einstieg: baudrate
-5681: 2B09                    bmi     l2              ; 7200?
-5683: CE0003                  ldu     #$03            ; 3600: warte 62 zyklen
-5686: 170065                  lbsr    wa6
-5689: 17007A                  lbsr    euro            ; euro-wartezeit
-568C: CE0001          l2      ldu     #$01            ; warte 30
-568F: 17005F                  lbsr    wa0
-5692: 170071                  lbsr    euro            ; euro-wartezeit
-5695: 54              l3      lsrb                    ; bit aus datenbyte
-5696: 252B                    bcs     eins            ; 1-bit?
-5698: B6FCF2                  lda     pb              ; 0-bit:
-569B: 8801                    eora    #$01            ; flanke erzeugen
-569D: B7FCF2                  sta     pb
-56A0: 9653                    lda     baud            ; baudrate
-56A2: 2B09                    bmi     l4              ; 7200?
-56A4: CE0003                  ldu     #$03            ; 3600: warte 62 zyklen
-56A7: 170044                  lbsr    wa6
-56AA: 170059                  lbsr    euro            ; euro-wartezeit
-56AD: CE0002          l4      ldu     #$02            ; warte 43 zyklen
-56B0: 17003E                  lbsr    wa0
-56B3: 170050                  lbsr    euro            ; euro-wartezeit
-56B6: B6FCF2                  lda     pb              ; flanke erzeugen
-56B9: 8801                    eora    #$01
-56BB: B7FCF2                  sta     pb
-56BE: 313F                    leay    -1,y            ; bitzaehler
-56C0: 26BD                    bne     l1              ; alle bits ausgegeben?
-56C2: 39                      rts
-56C3:                 
-56C3: DE1B            eins    ldu     pruef           ; pruefsumme
-56C5: 3341                    leau    1,u             ; erhoehen
-56C7: DF1B                    stu     pruef
-56C9: 9653                    lda     baud            ; baudrate
-56CB: 2B09                    bmi     l5              ; 7200?
-56CD: CE0003                  ldu     #$03            ; 3600: warte 62 zyklen
-56D0: 17001B                  lbsr    wa6
-56D3: 170030                  lbsr    euro            ; euro-wartezeit
-56D6: CE0001          l5      ldu     #$01            ; warte 40 zyklen
-56D9: 170010                  lbsr    wa10
-56DC: 170027                  lbsr    euro            ; euro-wartezeit
-56DF: B6FCF2                  lda     pb              ; flanke erzeugen
-56E2: 8801                    eora    #$01
-56E4: B7FCF2                  sta     pb
-56E7: 313F                    leay    -1,y            ; bitzaehler
-56E9: 2694                    bne     l1              ; alle bits ausgegeben?
-56EB: 39                      rts
-56EC:                 
-56EC:                 * warteschleifen - - - - - - - - - - - - - - -
-56EC:                 
-56EC:                 ; in: u                 wartezeit: 
-56EC:                 ;                               wa0: u*13+14
-56EC:                 ;                               wa6: u*13+20
-56EC:                 ;                               wa8: u*13+22
-56EC:                 ;                               wa10: u*13+24
-56EC:                 ; out: u                = 0
-56EC:                 ; veraendert: u
-56EC:                 
-56EC:                                                 ; lbsr = 9 zyklen
-56EC: 12              wa10    nop                     ;      = 2 zyklen
-56ED: 12              wa8     nop                     ;      = 2 zyklen
-56EE: 12              wa6     nop                     ;      = 2 zyklen
-56EF: 12                      nop                     ;      = 2 zyklen
-56F0: 12                      nop                     ;      = 2 zyklen
-56F1: 335F            wa0     leau    -1,u            ;      = 5 zyklen
-56F3: 11830000                cmpu    #$00            ;      = 5 zyklen
-56F7: 26F8                    bne     wa0             ;      = 3 zyklen
-56F9: 39                      rts                     ;      = 5 zyklen
-56FA:                 
-56FA:                 * eurocom warteschleife  - - - - - - - - - - -
-56FA:                 * euro=31 zyklen  euro1=46 zyklen
-56FA:                 
-56FA:                 ; in: -
-56FA:                 ; out: u        = 0
-56FA:                 ; veraendert: u
-56FA:                 
-56FA:                                                 ; lbsr = 9 zyklen
-56FA: 11830000        euro1   cmpu    #$00            ;      = 5 zyklen
-56FE: 11830000                cmpu    #$00            ;      = 5 zyklen
-5702: 11830000                cmpu    #$00            ;      = 5 zyklen
-5706: 119353          euro    cmpu    baud            ;      = 7 zyklen
-5709: 119353                  cmpu    baud            ;      = 7 zyklen
-570C: CE0000                  ldu     #$00            ;      = 3 zyklen
-570F: 39                      rts                     ;      = 5 zyklen
-5710:                 
-5710:                 
+4F00:                         lbra    start1
+4F00:                 
+4F00:                  else
+4F00:                  if (systype = syssim)
+4F00:                 
+4F00:                 ; sim6809-spezifisch
+4F00:                 pb      equ     $ff20   : port/datenrichtungs-register
+4F00:                 crb     equ     $ff21   ; port-kontrollregister
+4F00:                 inmask  equ     $01     ; pb bit-maske eingabe
+4F00:                 outmask equ     $FC     ; pb bit-maske ausgabe
+4F00:                 
+4F00:                         org     $100
+0100: 10CE0100                lds     #$100   ; stack initialisieren
+0104:                 
+0104:                  if (testsave = 0)
+0104: 16012F                  lbra    start1
+0107:                  else
+0107:                 
+0107:                 test    leax    tsave,pcr
+0107:                         ldy     #name
+0107:                         ldb     #(dsave-tsave)
+0107:                 f1      lda     ,x+
+0107:                         sta     ,y+
+0107:                         decb
+0107:                         bne     f1
+0107:                         lbra    on
+0107:                 
+0107:                 tsave   fcb "t           .bin"  ; name+typ
+0107:                         fcb $01                 ; flag
+0107:                         fcw dsave               ; start
+0107:                         fcw dsaveend-dsave      ; laenge
+0107:                         fcw 0,0                 ; res1, res2
+0107:                         fcw dsaveend            ; ende
+0107:                         
+0107:                 dsave   fcb 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+0107:                         fcb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+0107:                 dsaveend
+0107:                 
+0107:                  endif
+0107:                 
+0107:                 ; ( -> a )
+0107: 3404            in      pshs    b
+0109: 113F            inwait  swi3
+010B: 25FC                    bcs     inwait
+010D: C10A                    cmpb    #$0a            ; lf -> cr
+010F: 2602                    bne     iw1
+0111: C60D                    ldb     #$0d
+0113: 1F98            iw1     tfr     b,a
+0115: 8D02                    bsr     outasc
+0117: 3584                    puls    b,pc
+0119:                 
+0119:                 ; ( a -> )
+0119: 3404            outasc  pshs    b
+011B: 1F89                    tfr     a,b
+011D: 103F                    swi2
+011F: 3584                    puls    b,pc
+0121:                 
+0121:                 ; ( -> )
+0121: 13              hks     sync            ; monitor = simulationsende
+0122:                 
+0122:                         else
+0122:                         if (systype = sysdragon)
+0122:                 
+0122:                 ; dragon-spezifisch
+0122:                 pb      equ     $ff20
+0122:                 inmask  equ     $01     ; pb bit-maske
+0122:                 outmask equ     $FC     ; pb bit-maske ausgabe
+0122:                 hks     equ     $e000   ; basic
+0122:                 outasc  equ     $e001   ; ausgabe ein ascii-zeichen
+0122:                 in      equ     $e002   ; eingabe ein ascii-zeichen
+0122:                 
+0122:                         org     $5000   ; unter 32-kbyte-grenze
+0122:                         lbra    start1
+0122:                 
+0122:                  else
+0122:                         ; unbekannter typ
+0122:                         end
+0122:                  endif
+0122:                  endif
+0122:                  endif
+0122:                 
+0122:                 
+0122:                 * ausgabe texte
+0122:                 
+0122: 736176653D7320  tmode   fcc     "save=s : load=l : verify=v : "
+013F: 04                      fcb     $04
+0140: 6E616D65203A20  tnam    fcc     "name : "
+0147: 04                      fcb     $04
+0148: 74797020203A20  ttyp    fcc     "typ  : "
+014F: 04                      fcb     $04
+0150: 73746172743A20  tstart  fcc     "start: "
+0157: 04                      fcb     $04
+0158: 656E6465203A20  tende   fcc     "ende : "
+015F: 04                      fcb     $04
+0160: 62617564726174  tbaud   fcc     "baudrate 3600 = 0, 7200 = 1 : "
+017E: 04                      fcb     $04
+017F: 65696E67616265  tfehl   fcc     "eingabefehler, bitte neu eingeben!"
+01A1: 04                      fcb     $04
+01A2: 7265636F726420  tok1    fcc     "record on?"
+01AC: 04                      fcb     $04
+01AD: 6F6B3F20286372  tok     fcc     "ok? (cr)"
+01B5: 04                      fcb     $04
+01B6: 6F6B            tok2    fcc     "ok"
+01B8: 04                      fcb     $04
+01B9: 6665686C657220  tfpp    fcc     "fehler in parameterblock!      "
+01D8: 04                      fcb     $04
+01D9: 6665686C657220  tfpd    fcc     "fehler im datenblock!        "
+01F6: 04                      fcb     $04
+01F7: 6E72206E616D65  tnr     fcc     "nr name         typ start   ende"
+0217: 04                      fcb     $04
+0218: 736176653A6C6F  tstop   fcc     "save:load:verify? (yes=y) "
+0232: 04                      fcb     $04
+0233: 676F            tgo     fcc     "go"
+0235: 04                      fcb     $04
+0236:                 
+0236:                 ***********************************************
+0236:                 * supertape-hauptprogramm start bei $5000 - - *
+0236:                 ***********************************************
+0236:                         setdp   $00
+0236:                 
+0236: 7F4F10          start1  clr     flag
+0239: 8E3030                  ldx     #$3030          ; "00" index anfangswert
+023C: BF4F1D                  stx     nr              ; index bandverzeichnis
+023F: C604                    ldb     #4              ; 4 versuche
+0241: 8E0122          eingab  ldx     #tmode          ; aktion abfragen
+0244: 170251                  lbsr    out
+0247: 17FEBD                  lbsr    in
+024A: 8153                    cmpa    #$53            ; "s"
+024C: 2715                    beq     sv0
+024E: 814C                    cmpa    #$4c            ; "l"
+0250: 271D                    beq     ld0
+0252: 8156                    cmpa    #$56            ; "v"
+0254: 2714                    beq     ve0
+0256: 5A                      decb                    ; versuchszaehler
+0257: 102703A0                lbeq    aus             ; exit
+025B: 8E017F                  ldx     #tfehl          ; fehlermeldung
+025E: 170237                  lbsr    out             ; ausgeben
+0261: 20DE                    bra     eingab          ; naechster versuch
+0263:                 
+0263: 8601            sv0     lda     #$01            ; save-modus
+0265: B74F10                  sta     flag            ; merken
+0268: 2005                    bra     ld0             ; weiter bei load
+026A: 8602            ve0     lda     #$02            ; verify-modus
+026C: B74F10                  sta     flag
+026F: 8E0140          ld0     ldx     #tnam           ; name erfragen
+0272: 170223                  lbsr    out
+0275: 8E4F00                  ldx     #name
+0278: BF4F51                  stx     zahl            ; startzeiger
+027B: C60C                    ldb     #12             ; laenge
+027D: F74F50                  stb     byte            ; fuer prnaty
+0280: 3A                      abx
+0281: 301F                    leax    -1,x            ; start+len-1
+0283: BF4F1B                  stx     pruef           ; pufferendposition
+0286: 8E4F00                  ldx     #name           ; zielpuffer
+0289: 1700D9                  lbsr    prnaty          ; einlesen
+028C: 25E1                    bcs     ld0             ; nochmal bei fehleingabe
+028E: B64F10                  lda     flag            ; modus
+0291: 8100                    cmpa    #$00            ; load?
+0293: 2610                    bne     ty0             ; weiter mit typ bei save oder verify
+0295: 8E4F00                  ldx     #name           ; eingabepuffer
+0298: A680            ld1     lda     ,x+             ; nach
+029A: 812E                    cmpa    #$2e            ; "." absuchen
+029C: 102700AD                lbeq    ok              ; punkt gefunden, inhaltsverzeichnis!
+02A0: 8C4F0B                  cmpx    #name+11        ; pufferende?
+02A3: 23F3                    bls     ld1             ; weiter suchen
+02A5:                                                 ; sonst...
+02A5: 8E0148          ty0     ldx     #ttyp           ; typ abfragen
+02A8: 1701ED                  lbsr    out
+02AB: 8E4F0D                  ldx     #typ
+02AE: BF4F51                  stx     zahl
+02B1: C603                    ldb     #3              ; laenge
+02B3: F74F50                  stb     byte            ; fuer prnaty
+02B6: 3A                      abx
+02B7: 301F                    leax    -1,x            ; start+len-1
+02B9: BF4F1B                  stx     pruef           ; pufferendposition
+02BC: 8E4F0D                  ldx     #typ            ; zielpuffer
+02BF: 1700A3                  lbsr    prnaty          ; einlesen
+02C2: 25E1                    bcs     ty0             ; nochmal bei fehleingabe
+02C4: B64F10                  lda     flag            ; modus
+02C7: 8102                    cmpa    #$02            ; verify?
+02C9: 10270080                lbeq    ok              ; dann nur einlesen
+02CD:                 
+02CD: 8E0150          st0     ldx     #tstart         ; startadresse abfragen
+02D0: 1701C5                  lbsr    out
+02D3: 17017E                  lbsr    hex0            ; hex-zahl einlesen
+02D6: 25F5                    bcs     st0             ; wiederholen bei syntaxfehler
+02D8: 10BE4F51                ldy     zahl            ; wert holen
+02DC: 10BF4F11                sty     start           ; als startadresse
+02E0: B64F10                  lda     flag            ; modus
+02E3: 8101                    cmpa    #$01            ; save?
+02E5: 270C                    beq     st2             ;
+02E7: C104                    cmpb    #4              ; leereingabe?
+02E9: 2705                    beq     st1             ; zu ok-abfrage
+02EB: 8A04                    ora     #$04            ; steuerbyte: startadr.
+02ED: B74F10                  sta     flag            ; vorgeben bei load/verify
+02F0: 16005A          st1     lbra    ok              ; ok-abfrage
+02F3: C104            st2     cmpb    #4              ; nur save: leereingabe?
+02F5: 2608                    bne     end             ; startadr. -> endadr.
+02F7: 8E017F                  ldx     #tfehl          ; startadr. leer ->
+02FA: 17019B                  lbsr    out             ; fehler
+02FD: 20CE                    bra     st0             ; neueingabe startadr.
+02FF:                 
+02FF: 8E0158          end     ldx     #tende          ; endadresse+1 abfragen
+0302: 170193                  lbsr    out
+0305: 17014C                  lbsr    hex0            ; hex-zahl einlesen
+0308: 25F5                    bcs     end             ; wiederholen bei syntaxfehler
+030A: 10BE4F51                ldy     zahl            ; wert holen
+030E: 10BF4F19                sty     ende            ; als endadresse+1
+0312: C104                    cmpb    #4              ; leereingabe?
+0314: 2708                    beq     en1             ; ja, dann fehler
+0316: BE4F11                  ldx     start
+0319: BC4F19                  cmpx    ende            ; start < ende? (laenge=ende-start)
+031C: 2B08                    bmi     ba0             ; ja, weiter mit baudrate
+031E: 8E017F          en1     ldx     #tfehl          ; fehler bei eingabe
+0321: 170174                  lbsr    out
+0324: 20A7                    bra     st0             ; wieder startadr. abfragen
+0326:                 
+0326: 8E0160          ba0     ldx     #tbaud          ; baudrate abfragen
+0329: 17016C                  lbsr    out
+032C: 17FDD8                  lbsr    in              ; ziffer (0,1) erwartet
+032F: 840F                    anda    #$0f            ; $30/$31 -> 0/1
+0331: 2714                    beq     ok1             ; 3600 baud
+0333: 8101                    cmpa    #$01            ; 1?
+0335: 2708                    beq     ba1             ; ja, dann 7200 baud
+0337: 8E017F                  ldx     #tfehl          ; fehler bei eingabe
+033A: 17015B                  lbsr    out
+033D: 20E7                    bra     ba0             ; erneut abfragen
+033F: B64F10          ba1     lda     flag            ; bit 7 ist
+0342: 8A80                    ora     #$80            ; 7200-baud-marke
+0344: B74F10                  sta     flag
+0347:                 
+0347: 8E01A2          ok1     ldx     #tok1           ; "record on?"
+034A: 17014B                  lbsr    out             ; nur bei save
+034D: 8E01AD          ok      ldx     #tok            ; "ok?" bei load/verify
+0350: 170145                  lbsr    out             ; und auf
+0353: 17FDB1                  lbsr    in              ; eingabe warten
+0356: 810D                    cmpa    #$0d            ; nur wenn "cr"
+0358: 1026029F                lbne    aus             ; kein "cr", dann ende
+035C: 8E0233                  ldx     #tgo            ; sonst "go"
+035F: 170136                  lbsr    out
+0362: 160149                  lbra    on              ; zur eigentlichen aktion
+0365:                 
+0365:                 ************************************************
+0365:                 * up fuer ein-ausgabe - - - - - - - - - - - - -*
+0365:                 ************************************************
+0365:                 
+0365:                 * pruefe zulaessige eingabe- - - - - - - - - - -
+0365:                 
+0365:                 ; in: x         eingabepufferadresse
+0365:                 ;     zahl      eingabepufferadresse
+0365:                 ;     pruef     letzte pufferadresse
+0365:                 ;     byte      anzahl der zeichen (via headin)
+0365:                 ;     flag      modus
+0365:                 ; out: carry-flag  0|1 ... ok | syntaxfehler
+0365:                 ; veraendert: a,b,x
+0365:                 
+0365: 17003A          prnaty  lbsr    headin          ; eingabe in x
+0368: F64F10                  ldb     flag            ; modus
+036B: C100                    cmpb    #$00            ; bei load alles ok
+036D: 2727                    beq     praus           ; und exit
+036F:                                                 ; fuer verify+save:
+036F: BE4F51                  ldx     zahl            ; x wieder herstellen
+0372: A680            p1      lda     ,x+             ; enthaelt eingabe
+0374: 812E                    cmpa    #$2e            ; einen punkt
+0376: 2721                    beq     fhead           ; ja, fehler
+0378: BC4F1B                  cmpx    pruef           ; pufferende?
+037B: 26F5                    bne     p1              ; nein, weiterpruefen
+037D: B64F10                  lda     flag            ; modus
+0380: 8102                    cmpa    #$02            ; verify?
+0382: 2712                    beq     praus           ; ja, dann ok und exit
+0384:                                                 ; fuer save:
+0384: BE4F51                  ldx     zahl            ; x wieder herstellen
+0387: A680            p2      lda     ,x+             ; enthaelt eingabe joker?
+0389: 813F                    cmpa    #$3f            ; fragezeichen "?"?
+038B: 270C                    beq     fhead           ; fehler
+038D: 812A                    cmpa    #$2a            ; stern "*"?
+038F: 2708                    beq     fhead           ; fehler
+0391: BC4F1B                  cmpx    pruef           ; pufferende?
+0394: 26F1                    bne     p2              ; nein, weiterpruefen
+0396:                 
+0396: 1CFE            praus   clc                     ; carry=0: eingabe ok
+0398: 39                      rts
+0399:                 
+0399: 8E017F          fhead   ldx     #tfehl          ; fehlermeldung
+039C: 1700F9                  lbsr    out             ; ausgeben und
+039F: 1A01                    sec                     ; carry=1: eingabefehler
+03A1: 39                      rts
+03A2:                 
+03A2:                 * lese ascii-zeichen - - - - - - - - - -  - - - -
+03A2:                 
+03A2:                 ; in: x         pufferadresse
+03A2:                 ;     zahl      pufferadresse
+03A2:                 ;     byte      anzahl der zeichen
+03A2:                 ;     pruef     letzte pufferadresse
+03A2:                 ; out: (x)      eingelesene zeichen
+03A2:                 ; veraendert: a,b,x,y
+03A2:                 
+03A2: 17FD62          headin  lbsr    in              ; zeichen einlesen
+03A5: 810D                    cmpa    #$0d            ; zeilenende (cr)?
+03A7: 2719                    beq     heaaus          ; fertig
+03A9: F14F50                  cmpb    byte            ; laengen-counter
+03AC: 260F                    bne     head11          ; am start?
+03AE: 108E2020                ldy     #$2020          ; 2 leerzeichen
+03B2: 10AF80          head12  sty     ,x+             ; 2 bytes löschen
+03B5: BC4F1B                  cmpx    pruef           ; letztes pufferbyte erreicht?
+03B8: 26F8                    bne     head12          ; weiter mit padding
+03BA: BE4F51                  ldx     zahl            ; wieder zum pufferstart
+03BD: A780            head11  sta     ,x+             ; eingelesenes zeichen speichern
+03BF: 5A                      decb                    ; anzahl herunterzaehlen
+03C0: 26E0                    bne     headin          ; bei 0 fertig
+03C2: 39              heaaus  rts
+03C3:                 
+03C3:                 * change hex in ascii - - - - - - - - - - - - - -
+03C3:                 
+03C3:                 ; in: x,(x)     adresse auf 16-bit-wert
+03C3:                 ; out: (x)      4 bytes mit hex-darstellung
+03C3:                 ; veraendert: a,b,u,x,y
+03C3:                 
+03C3: CE0002          hexasc  ldu     #2              ; 2 hex-bytes
+03C6: 108E0004        hexas   ldy     #4              ; bit-zaehler
+03CA: 8600                    lda     #0              ; zu
+03CC: E601                    ldb     1,x             ; low-byte
+03CE: 58              h1      aslb                    ; oberes
+03CF: 49                      rola                    ; nibble in a
+03D0: 313F                    leay    -1,y            ; bit-counter
+03D2: 26FA                    bne     h1              ; alle 4 bits?
+03D4:                 
+03D4: 108E0004                ldy     #4              ; 4 mal
+03D8: 54              h2      lsrb                    ; b wieder zurueck
+03D9: 313F                    leay    -1,y            ; schieben
+03DB: 26FB                    bne     h2
+03DD:                 
+03DD: 8109                    cmpa    #$09            ; a in hex-ziffer
+03DF: 2F02                    ble     h3              ; 0-9?
+03E1: 8B07                    adda    #7              ; "a"-"f"
+03E3: 8B30            h3      adda    #$30            ; ascii-zeichen
+03E5: C109                    cmpb    #$09            ; b in hex-ziffer
+03E7: 2F02                    ble     h4              ; 0-9?
+03E9: CB07                    addb    #7              ; "a"-"f"
+03EB: CB30            h4      addb    #$30            ; ascii-zeichen
+03ED: 335F                    leau    -1,u            ; byte-zaehler
+03EF: 11830000                cmpu    #0              ; alle bytes?
+03F3: 2706                    beq     h5              ; fertig
+03F5: ED02                    std     2,x             ; 2 hex-ziffern ablegen
+03F7: 301F                    leax    -1,x            ; zum high-byte
+03F9: 20CB                    bra     hexas
+03FB: ED01            h5      std     1,x             ; x schon vermindert
+03FD:                                                 ; korrigiert, 2 hex-ziffern
+03FD: 39                      rts                     ; statt wert ablegen
+03FE:                 
+03FE:                 * dokumentiere auf bildschirm - - - - - - - - - -
+03FE:                 
+03FE:                 ; in: nr
+03FE:                 ;     (ldname)..(ldende+1)
+03FE:                 ; out: (ldstar)..(ldstar+3)     startadresse im hex-format
+03FE:                 ;      (ldende)..(ldende+3)     endadresse im hex-format
+03FE:                 ;      (ldende+4)               endemarke
+03FE:                 ; veraendert: a,b,u,x,y
+03FE:                 
+03FE: BE4F1D          direct  ldx     nr              ; bandindex als ascii-nummer
+0401: 8C3030                  cmpx    #$3030          ; "00"?
+0404: 2606                    bne     d0              ; nein, dann tabellenzeile
+0406: 8E01F7                  ldx     #tnr            ; tabellenkopf ausgeben
+0409: 17008C                  lbsr    out
+040C: FC4F1D          d0      ldd     nr              ; bandindex
+040F: 10833939                cmpd    #$3939          ; = "99"
+0413: 2606                    bne     d1
+0415: CC3030                  ldd     #$3030          ; ueberrollen auf "00"
+0418: FD4F1D                  std     nr
+041B: C139            d1      cmpb    #$39            ; einerstelle
+041D: 2604                    bne     d2              ; ="9" (ueberlauf)?
+041F: 8B01                    adda    #$01            ; zehnerstelle +1
+0421: C62F                    ldb     #$2f            ; "0"-1
+0423: CB01            d2      addb    #$01            ; einerstelle +1
+0425: FD4F1D                  std     nr              ; neuen wert speichern
+0428: 8E4F31                  ldx     #ldstar         ; startadresse nach hex
+042B: 17FF95                  lbsr    hexasc          ; ueberschreibt ldlaen
+042E: 8E4F39                  ldx     #ldende         ; endadresse nach hex
+0431: 17FF8F                  lbsr    hexasc          ; ueberschreibt 2 folgebytes
+0434: 8620                    lda     #$20            ; statt punkt ein leerzeichen
+0436: B74F2C                  sta     ldpunk
+0439: B74F30                  sta     ldflag          ; steuerbyte auch als leerzeichen
+043C: B74F1F                  sta     nr+2
+043F: 8E2020                  ldx     #$2020          ; reserviert sicherheitshalber
+0442: BF4F35                  stx     ldres1          ; mit leerzeichen fuellen
+0445: BF4F37                  stx     ldres2
+0448: 8604                    lda     #$04            ; ausgabeendemarkierung
+044A: B74F3D                  sta     ldende+4
+044D: 8E4F1D                  ldx     #nr             ; ausgabestart 
+0450: 170045                  lbsr    out             ; von nr bis ldende+3 ausgeben
+0453: 39                      rts
+0454:                 
+0454:                 * change ascii in hex - - - - - - - - - - - - -
+0454:                 
+0454:                 ; in: zahl      adresse auf 16-bit-wert
+0454:                 ; out: (zahl)           16-bit-wert
+0454:                 ;      b                (4 - anzahl der ziffern), 4 ... leereingabe
+0454:                 ;      carry-flag       0|1 ... ok | syntaxfehler
+0454:                 ; veraendert: a,b,u,y,x (via out)
+0454:                 
+0454: CE0000          hex0    ldu     #0              ; ergebnis register
+0457: FF4F51                  stu     zahl            ; mit 0 initialisieren
+045A: C604                    ldb     #4              ; max. 4 zeichen
+045C: 17FCA8          hex     lbsr    in              ; zeichen von tastatur
+045F: 810D                    cmpa    #$0d            ; eingabeende mit return
+0461: 272B                    beq     hexaus          ; ende
+0463: 8130                    cmpa    #$30            ; < '0'
+0465: 2B28                    bmi     hexf            ; ja, dann fehler
+0467: 8139                    cmpa    #$39            ; <= '9'
+0469: 2F0A                    ble     in1             ; ja, dann gut ziffer
+046B: 8141                    cmpa    #$41            ; < 'a'
+046D: 2B20                    bmi     hexf            ; ja, dann fehler
+046F: 8146                    cmpa    #$46            ; > 'f'
+0471: 2E1C                    bgt     hexf            ; ja, dann fehler
+0473: 8007                    suba    #7              ; a-f-korrektur
+0475: 840F            in1     anda    #$0f            ; ascii-bits ausblenden
+0477:                 
+0477: 108E0004                ldy     #4              ; bit-zaehler
+047B: 784F52          hex1    asl     zahl+1          ; vorlaeufiges ergebnis
+047E: 794F51                  rol     zahl            ; insgesamt: * 16
+0481: 313F                    leay    -1,y            ; alle bits?
+0483: 26F6                    bne hex1                ; weiter
+0485: BA4F52                  ora     zahl+1          ; wert neu eingelesene
+0488: B74F52                  sta     zahl+1          ; ziffer dazu
+048B: 5A                      decb                    ; hex-ziffern-zaehler
+048C: 26CE                    bne     hex             ; maximalanzahl erreicht
+048E: 39              hexaus  rts                     ; ok: carry implizit = 0
+048F:                 
+048F: 8E017F          hexf    ldx     #tfehl          ; fehler in hex-zahl
+0492: 170003                  lbsr    out
+0495: 1A01                    sec                     ; fehler: carry = 1
+0497: 39                      rts
+0498:                 
+0498:                 * standard ausgabe cr+lf+text - - - - - -
+0498:                 
+0498:                 ; in: x         adresse auf zeichenkette
+0498:                 ;     (x)       zeichenkette
+0498:                 ; out: -
+0498:                 ; veraendert: a,x
+0498:                 
+0498: 860D            out     lda     #$0d            ; "cr"
+049A: 17FC7C                  lbsr    outasc          ; ausgeben
+049D: 860A                    lda     #$0a            ; "lf"
+049F: 17FC77                  lbsr    outasc          ; ausgeben
+04A2: A680            out2    lda     ,x+             ; zeichen
+04A4: 8104                    cmpa    #$04            ; endemarkierung?
+04A6: 2705                    beq     out1            ; ja, fertig
+04A8: 17FC6E                  lbsr    outasc          ; sonst ausgeben
+04AB: 20F5                    bra     out2            ; weiter
+04AD: 39              out1    rts
+04AE:                 
+04AE:                 * eingabe ende - - - - - - -- - - - - - -
+04AE:                 
+04AE:                 ; ab hier keine betriebssystemroutinen mehr, daher
+04AE:                 ; jetzt interrupts aus und directpage angepasst.
+04AE:                 
+04AE: 1A50            on      orcc    #$50            ; firq+irq abschalten
+04B0: 864F                    lda     #$4f            ; directpage setzen auf
+04B2: 1F8B                    tfr     a,dp            ; $4f00-$4fff
+04B4:                         setdp   $4f
+04B4:                 
+04B4:                  if (systype = syseuro)
+04B4:                  endif
+04B4: 7FFF21                  clr     crb             ; pia control register port b
+04B7:                                                 ; bit 2 =0: data direction r.
+04B7: 86FE                    lda     #~inmask        ; ausgabe, eingabe bit: 1, 0
+04B9: B7FF20                  sta     pb              ; rest auf ausgabe
+04BC: 8604                    lda     #$04            ; zurueck zu port register
+04BE: B7FF21                  sta     crb
+04C1:                 
+04C1: 9610                    lda     flag            ; lade steuerbyte
+04C3: 8401                    anda    #$01            ; isoliere modus
+04C5: 8101                    cmpa    #$01            ; save?
+04C7: 10270234                lbeq    save            ; andernfalls load oder verify
+04CB:                 
+04CB:                 ***********************************************
+04CB:                 * load supertape - -hp 28 zyklen - - - - - - -*
+04CB:                 ***********************************************
+04CB:                 
+04CB: 8600            load    lda     #$00            ; initialisierung
+04CD: 9753                    sta     baud            ; 3600 baud
+04CF: 8680                    lda     #$80            ; bit 7 gesetzt
+04D1: 9750                    sta     byte            ; fuer letzten eingangsstatus
+04D3: C6FF                    ldb     #$ff
+04D5: 8E0000                  ldx     #$00            ; fuer pruefsumme ruecksetzen
+04D8:                 
+04D8:                 sycpar
+04D8:                  if systype = syseuro
+04D8:                         lda     piaac0          ; tastatur: pia cr port a (int flag)
+04D8:                         lbmi    aus             ; bit7=1 break
+04D8:                  else
+04D8: A6C4                    lda     ,u              ; warte 5
+04DA: 1021011D                lbrn    aus             ; nie, warte 5
+04DE:                  endif
+04DE: 12                      nop                     ; warte 2+4
+04DF: 108E0001                ldy     #$01
+04E3: 12                      nop                     ; warte 2+4
+04E4: 108E0001                ldy     #$01            ; bitzaehler = 1
+04E8: 1701D6                  lbsr    rdbit           ; empfange 1 bit (in b)
+04EB: C116                    cmpb    #$16            ; sync erkannt?
+04ED: 26E9                    bne     sycpar          ; weiter synchronisieren
+04EF:                 
+04EF: 119353          sycp    cmpu    baud            ; warte 14
+04F2: 119353                  cmpu    baud
+04F5: 1701BA                  lbsr    rdbyte          ; empfange 1 byte
+04F8: C116                    cmpb    #$16            ; noch sync-zeichen?
+04FA: 27F3                    beq     sycp            ; ja, weiter alle lesen
+04FC:                 
+04FC: C12A                    cmpb    #$2a            ; startbyte parameterblock?
+04FE: 26CB                    bne     load            ; nein, dann naechsten block
+0500: 9F1B                    stx     pruef           ; pruefsumme zuruecksetzen
+0502:                 
+0502:                 * empfange parameter - - - - - - - - - - - - -
+0502:                 * name, typ, flag    - - - - - - - - - - - - -
+0502:                 
+0502: 8E4F20                  ldx     #ldname         ; zielpuffer
+0505: 12              pantf   nop                     ; warte 2
+0506: 1701A9                  lbsr    rdbyte          ; ein parameterbyte
+0509: E780                    stb     ,x+             ; in den puffer
+050B: 11830000                cmpu    #$00            ; warte 5
+050F: 8C4F30                  cmpx    #ldflag         ; name+flag fertig?
+0512: 23F1                    bls     pantf           ; nein, weiter einlesen
+0514: 2006                    bra     par             ; sonst zweiten teil
+0516:                 
+0516:                 * empfange restliche parameter - - - - - - -
+0516:                 
+0516: CE0000          parest  ldu     #$00            ; warte 6
+0519: CE0000                  ldu     #$00
+051C:                                                 ; zweiter teil mit 16-bit-werten
+051C: 170193          par     lbsr    rdbyte          ; empfange low-byte
+051F: E701                    stb     1,x             ; big-endian an hoeherer adresse
+0521: 3D                      mul                     ; warte 15
+0522: 8C0000                  cmpx    #$00
+0525: 17018A                  lbsr    rdbyte          ; empfange high-byte
+0528: E781                    stb     ,x++            ; big-endian an niedrige adresse
+052A: 8C4F37                  cmpx    #ldres2         ; parameterblockende?
+052D: 23E7                    bls     parest          ; nein, weiter einlesen
+052F:                 
+052F:                 * empfange pruefsumme parameter - - - - - - -
+052F:                 
+052F: 9E1B                    ldx     pruef           ; bisherige pruefsumme
+0531: 12                      nop                     ; warte 2
+0532: 17017D                  lbsr    rdbyte          ; low-byte pruefsumme
+0535: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
+0537: D11C                    cmpb    pruef+1         ; pruefsumme-low vergleichen
+0539: 10270009                lbeq    re1             ; wenn gleich weiter
+053D: 8E01B9                  ldx     #tfpp           ; nicht gleich! fehler
+0540: 17FF55                  lbsr    out             ; fehler pruefsumme
+0543: 1600A5                  lbra    stop            ; ende
+0546: 8C0000          re1     cmpx    #$00            ; warte 6
+0549: 12                      nop
+054A: 170165                  lbsr    rdbyte          ; high-byte pruefsumme
+054D: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
+054F: D11B                    cmpb    pruef           ; pruefsumme-high vergleichen
+0551: 2709                    beq     re2             ; wenn gleich weiter
+0553: 8E01B9                  ldx     #tfpp           ; nicht gleich! fehler
+0556: 17FF3F                  lbsr    out             ; fehler pruefsuumme
+0559: 16008F                  lbra    stop            ; ende
+055C:                 
+055C:                 * startadresse und endadresse - - - - - - - - -
+055C:                 
+055C: 9610            re2     lda     flag            ; steuerbyte
+055E: 8404                    anda    #$04            ; maskiere bit
+0560: 8104                    cmpa    #$04            ; startadresse vorgegeben?
+0562: 2604                    bne     salt            ; nein, ueberspringen
+0564: DC11                    ldd     start           ; abgefragte startadresse
+0566: DD31                    std     ldstar          ; uebernehmen
+0568: DC31            salt    ldd     ldstar          ; berechne block-
+056A: D333                    addd    ldlaen          ; endadresse + 1
+056C: DD39                    std     ldende
+056E:                 
+056E:                 * vergleiche name - - - - - - - - - - - - - - -
+056E:                 
+056E: 108E4F20                ldy     #ldname         ; name von band
+0572: 8E4F00                  ldx     #name           ; name angegeben
+0575: E680            n0      ldb     ,x+             ; hole byte angegeben
+0577: C12A                    cmpb    #$2a            ; stern (*)?
+0579: 2716                    beq     typ1            ; ja, dann weiter mit typ
+057B: C13F                    cmpb    #$3f            ; fragezeichen (?)?
+057D: 270A                    beq     n1              ; ja, naechstes zeichen
+057F: E1A4                    cmpb    ,y              ; gleich bandname?
+0581: 2706                    beq     n1              ; ja, naechstes zeichen
+0583: 17FE78                  lbsr    direct          ; nicht gleich, dann parameter zeigen
+0586: 16FF42                  lbra    load            ; naechster versuch
+0589: 3121            n1      leay    1,y             ; weiter im bandnamen
+058B: 108C4F2B                cmpy    #ldname+11      ; fertig?
+058F: 23E4                    bls     n0              ; nein, weiter vergleichen
+0591:                 
+0591:                 * vergleiche typ - - - - - - - - - - - - - - - -
+0591:                 
+0591: 108E4F2D        typ1    ldy     #ldtyp          ; typ vom band
+0595: 8E4F0D                  ldx     #typ            ; typ angegeben
+0598: E680            t0      ldb     ,x+             ; hole byte angegeben
+059A: C12A                    cmpb    #$2a            ; stern (*)?
+059C: 2716                    beq     t1              ; ja, dann datei gefunden!
+059E: C13F                    cmpb    #$3f            ; fragezeichen (?)?
+05A0: 270A                    beq     t2              ; ja, naechstes zeichen
+05A2: E1A4                    cmpb    ,y              ; gleich bandtyp?
+05A4: 2706                    beq     t2              ; falscher typ?
+05A6: 17FE55                  lbsr    direct          ; nicht gleich, dann parameter zeigen
+05A9: 16FF1F                  lbra    load            ; naechster versuch
+05AC: 3121            t2      leay    1,y             ; weiter im bandtyp
+05AE: 108C4F2F                cmpy    #ldtyp+2        ; fertig?
+05B2: 23E4                    bls     t0              ; nein, weiter vergleichen
+05B4:                 
+05B4: 9630            t1      lda     ldflag          ; baudrate vom band einstellen
+05B6: 9753                    sta     baud            ; fuer den datenblock
+05B8:                 
+05B8: 8680                    lda     #$80            ; bit 7 gesetzt
+05BA: 9750                    sta     byte            ; fuer letzten eingangsstatus
+05BC: 8E0000                  ldx     #$00            ; fuer pruefsumme ruecksetzen
+05BF:                 
+05BF: D610                    ldb     flag            ; steuerbyte
+05C1: C402                    andb    #$02            ; modus verify/load ausmaskieren
+05C3: C102                    cmpb    #$02            ; verify?
+05C5: 2705                    beq     ve              ; ja
+05C7: 170037                  lbsr    daten           ; datenblock laden
+05CA: 2003                    bra     chek            ; pruefsumme kontrollieren
+05CC: 17008E          ve      lbsr    verify          ; datenblock verifizieren
+05CF:                 
+05CF: 2409            chek    bcc     right           ; laden/verify ok
+05D1: 8E01D9                  ldx     #tfpd           ; fehler im datenblock!
+05D4: 17FEC1                  lbsr    out
+05D7: 160011                  lbra    stop            ; ende
+05DA: 8E01B6          right   ldx     #tok2           ; ok ausgeben
+05DD: 17FEB8                  lbsr    out
+05E0: D610                    ldb     flag            ; steuerbyte
+05E2: C403                    andb    #$03            ; modus ausmaskieren
+05E4: C100                    cmpb    #$00            ; load?
+05E6: 2603                    bne     stop            ; ende bei save und verify
+05E8: 17FE13                  lbsr    direct          ; dateiinfo anzeigen
+05EB: 8E0218          stop    ldx     #tstop          ; weitere aktion abfragen
+05EE: 17FEA7                  lbsr    out
+05F1:                  if (systype = syssim)
+05F1: 13                      sync
+05F2:                  endif
+05F2: 17FB12                  lbsr    in
+05F5: 815B                    cmpa    #$5b            ; taste "y"?
+05F7: 1027FC3B                lbeq    start1          ; wieder zum start
+05FB:                 
+05FB: 1CAF            aus     andcc   #$af            ; freigabe firq+irq
+05FD: 7E0121                  jmp     hks             ; ins monitorprogramm (muss dp
+0600:                                                 ; wieder festlegen!)
+0600: 12                      nop                     ; nicht verwendet
+0601:                 
+0601:                 ***********************************************
+0601:                 * hp-load-ende - - - - - - - - - - - - - - - -*
+0601:                 ***********************************************
+0601:                 
+0601:                 * up daten - - - - - - - - - - - - - - - - - -
+0601:                 
+0601:                 ; in: baud                      baudrate ($80 = 7200)
+0601:                 ;     ldstar                    startadresse
+0601:                 ;     ldende                    endadresse + 1
+0601:                 ; out: carry-flag               status ( 0 | 1 ... ok | fehler)
+0601:                 ;      (ldstar) ... (ldende-1)  datenbereich
+0601:                 ; veraendert: a,b,u,x,y
+0601:                 
+0601: C6FF            daten   ldb     #$ff            ; empfangen und einrasten:
+0603: 119353          sycdar  cmpu    baud            ; warte 14
+0606: 119353                  cmpu    baud
+0609: 108E0001                ldy     #$01            ; warte 8
+060D: 108E0001                ldy     #$01            ; dabei bitzaehler = 1
+0611: 1700AD                  lbsr    rdbit           ; empfange 1 bit (in b)
+0614: C116                    cmpb    #$16            ; sync erkannt?
+0616: 26EB                    bne     sycdar          ; weiter synchronisieren
+0618:                 
+0618: 119353          sycd    cmpu    baud            ; warte 14
+061B: 119353                  cmpu    baud
+061E: 170091                  lbsr    rdbyte          ; empfange 1 byte
+0621: C116                    cmpb    #$16            ; noch sync-zeichen?
+0623: 27F3                    beq     sycd            ; ja, weiter alle lesen
+0625:                 
+0625: C1C5                    cmpb    #$c5            ; startbyte datenblock?
+0627: 2631                    bne     dat1            ; nein, dann fehlerstatus melden
+0629: 9F1B                    stx     pruef           ; pruefsumme zuruecksetzen
+062B:                 
+062B: 9E31                    ldx     ldstar          ; startadresse als datenziel
+062D: 2004                    bra     dat
+062F: 11830000        datlop  cmpu    #$00            ; warte 5
+0633: 17007C          dat     lbsr    rdbyte          ; ein datenbyte
+0636: E780                    stb     ,x+             ; in den speicher
+0638: 9C39                    cmpx    ldende          ; datenendadresse erreicht?
+063A: 25F3                    blo     datlop          ; nein, weiterlesen
+063C:                 
+063C: 9E1B                    ldx     pruef           ; bisherige pruefsumme
+063E: 8C0000                  cmpx    #$00            ; warte 4
+0641: 17006E                  lbsr    rdbyte          ; low-byte pruefsumme
+0644: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
+0646: D11C                    cmpb    pruef+1         ; pruefsumme-low vergleichen
+0648: 2610                    bne     dat1            ; fehlerstatus retour
+064A: 8C0000                  cmpx    #$00            ; warte 6
+064D: 12                      nop
+064E: 170061                  lbsr    rdbyte          ; high-byte pruefsumme
+0651: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
+0653: D11B                    cmpb    pruef           ; pruefsumme-high vergleichen
+0655: 2603                    bne     dat1            ; fehlerstatus retour
+0657: 1CFE                    clc                     ; ok status
+0659: 39                      rts                     ; zurueck
+065A: 1A01            dat1    sec                     ; fehler status
+065C: 39                      rts                     ; zurueck
+065D:                 
+065D:                 * up verify - - - - - - - - - - - - - - - - - -
+065D:                 
+065D:                 ; in: baud                      baudrate ($80 = 7200)
+065D:                 ;     ldstar                    startadresse
+065D:                 ;     ldende                    endadresse + 1
+065D:                 ;     (ldstar) ... (ldende-1)   datenbereich
+065D:                 ; out: carry-flag               status ( 0 | 1 ... ok | fehler)
+065D:                 ; veraendert: a,b,u,x,y
+065D:                 
+065D: C6FF            verify  ldb     #$ff            ; empfangen und einrasten:
+065F: 119353          sycver  cmpu    baud            ; warte 14
+0662: 119353                  cmpu    baud
+0665: 108E0001                ldy     #$01            ; warte 8
+0669: 108E0001                ldy     #$01            ; dabei bitzaehler = 1
+066D: 170051                  lbsr    rdbit           ; empfange 1 bit (in b)
+0670: C116                    cmpb    #$16            ; sync erkannt?
+0672: 26EB                    bne     sycver          ; weiter synchronisieren
+0674:                 
+0674: 119353          sycv    cmpu    baud            ; warte 14
+0677: 119353                  cmpu    baud
+067A: 170035                  lbsr    rdbyte          ; empfange 1 byte
+067D: C116                    cmpb    #$16            ; noch sync-zeichen?
+067F: 27F3                    beq     sycv            ; ja, weiter alle lesen
+0681:                 
+0681: C1C5                    cmpb    #$c5            ; startbyte datenblock?
+0683: 262A                    bne     ver1            ; nein, dann fehlerstatus melden
+0685: 9F1B                    stx     pruef           ; pruefsumme zuruecksetzen
+0687:                 
+0687: 9E31                    ldx     ldstar          ; startadresse als datenziel
+0689: 170026          verlop  lbsr    rdbyte          ; ein datenbyte
+068C: E180                    cmpb    ,x+             ; vergleichen
+068E: 261F                    bne     ver1            ; fehlerstatus, wenn abweichung
+0690: 9C39                    cmpx    ldende          ; datenendadresse erreicht?
+0692: 25F5                    blo     verlop          ; nein, weiter vergleichen
+0694:                 
+0694: 9E1B                    ldx     pruef           ; bisherige pruefsumme
+0696: 170019                  lbsr    rdbyte          ; low-byte pruefsumme
+0699: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
+069B: D11C                    cmpb    pruef+1         ; pruefsumme-low vergleichen
+069D: 2610                    bne     ver1            ; fehlerstatus retour
+069F: 8C0000                  cmpx    #$00            ; warte 6
+06A2: 12                      nop
+06A3: 17000C                  lbsr    rdbyte          ; high-byte pruefsumme
+06A6: 9F1B                    stx     pruef           ; blockprufsumme wieder herstellen
+06A8: D11B                    cmpb    pruef           ; pruefsumme-high vergleichen
+06AA: 2603                    bne     ver1            ; fehlerstatus retour
+06AC: 1CFE                    clc                     ; ok status
+06AE: 39                      rts                     ; zurueck
+06AF: 1A01            ver1    sec                     ; fehler status
+06B1: 39                      rts                     ; zurueck
+06B2:                 
+06B2:                 * up rdbyte ,rdbit - - - - - - - - - - - - - - - - -
+06B2:                 
+06B2:                 ; in: y         bitzaehler (1 oder 8)
+06B2:                 ;     baud      baudrate ( $00 | $80 ... 3600 | 7200 )
+06B2:                 ;     byte      pegel beim bitanfang (vom letzten aufruf)
+06B2:                 ; out: b        eingelesene bits
+06B2:                 ; veraendert: a,b,u,y
+06B2:                 
+06B2: 108E0008        rdbyte  ldy     #$08            ; bitzaehler=8
+06B6: 2009                    bra     rdbit           ; byte-einstieg
+06B8: CE0001          read    ldu     #$01            ; warte 41
+06BB: CE0001                  ldu     #$01            ; bitwartezeit
+06BE: 17014B                  lbsr    wa8
+06C1: 170155          rdbit   lbsr    euro1           ; euro-wartezeit
+06C4: 9653                    lda     baud            ; baudrate
+06C6: 2B0C                    bmi     rd              ; verzweige bei 7200
+06C8: CE0005                  ldu     #$05            ; warte 93
+06CB: CE0005                  ldu     #$05            ; bei 3600
+06CE: 17013B                  lbsr    wa8
+06D1: 170145                  lbsr    euro1           ; euro-wartezeit
+06D4: B6FF20          rd      lda     pb              ; pegelabtastung (ta)
+06D7: 8401                    anda    #inmask         ; maskiere port und
+06D9: 9150                    cmpa    byte            ; pegelvergleich mit (t0)
+06DB: 2707                    beq     rdeins          ; wenn gleich, dann eins
+06DD: 9750                    sta     byte            ; pegel merken
+06DF: 1CFE                    clc                     ; 0-bit carry=0
+06E1: 56                      rorb                    ; ergebnis-byte
+06E2: 200B                    bra     flanke          ; warte auf flanke
+06E4: 9750            rdeins  sta     byte            ; 1-bit: pegel merken
+06E6: DE1B                    ldu     pruef           ; pruefsumme
+06E8: 3341                    leau    1,u             ; erhoehen
+06EA: DF1B                    stu     pruef
+06EC: 1A01                    sec                     ; carry=1
+06EE: 56                      rorb                    ; ins ergebnis-byte
+06EF: B6FF20          flanke  lda     pb              ; eingang
+06F2: 8401                    anda    #inmask         ; maskieren
+06F4: 9150                    cmpa    byte            ; flankenaenderung?
+06F6: 27F7                    beq     flanke          ; nein, warten
+06F8: 9750                    sta     byte            ; als (t0) pegel merken
+06FA: 313F                    leay    -1,y            ; bitzaehler
+06FC: 26BA                    bne     read            ; alle bits empfangen?
+06FE: 39                      rts
+06FF:                 
+06FF:                 ************************************************
+06FF:                 * save supertape- - hp 21 zyklen - - - - - - - *
+06FF:                 ************************************************
+06FF:                 
+06FF: 0F53            save    clr     baud            ; 3600 baud einstellen
+0701:                 
+0701: DC19                    ldd     ende            ; endadresse + 1
+0703: 9311                    subd    start           ; minus startadresse
+0705: DD13                    std     laeng           ; ergibt datenblocklaenge
+0707:                 
+0707: 9610                    lda     flag            ; steuerbyte
+0709: 8480                    anda    #$80            ; baudrate maskieren
+070B: 9710                    sta     flag
+070D:                 
+070D:                 * sync-zeichen fuer parameter - - - - - - - - -
+070D:                 
+070D: 8E0040                  ldx     #$40            ; zaehler fuer 64 sync
+0710: C616            syncpa  ldb     #$16            ; sync-zeichen
+0712: 170070                  lbsr    outch           ; sende sync-zeichen
+0715: 12                      nop
+0716: 301F                    leax    -1,x            ; sync-zaehler -1
+0718: 26F6                    bne     syncpa          ; alle zeichen ausgegeben?
+071A:                 
+071A: C62A                    ldb     #$2a            ; startbyte parameterblock
+071C: 8D67                    bsr     outch           ; senden
+071E:                 
+071E: 9F1B                    stx     pruef           ; pruefsumme=0
+0720:                 
+0720:                 * sende parameterblock - - - - - - - - - - - -
+0720:                 
+0720: 8E4F00                  ldx     #name           ; parameterblock pufferstart
+0723: E680            parout  ldb     ,x+             ; parameter-byte
+0725: 8D5E                    bsr     outch           ; auf band
+0727: 8C4F10                  cmpx    #flag           ; name+flag ausgegeben?
+072A: 23F7                    bls     parout          ; nein, weiter
+072C:                 
+072C: 12              poutr   nop                     ; restliche 16-bit-parameter
+072D: E601                    ldb     1,x             ; in little-endian!
+072F: 8D54                    bsr     outch           ; low-byte
+0731: 119353                  cmpu    baud            ; warte 7
+0734: E681                    ldb     ,x++            ; high und zeiger+2
+0736: 8D4D                    bsr     outch           ; high-byte
+0738: 8C4F17                  cmpx    #res2           ; parameterblock fertig?
+073B: 23EF                    bls     poutr           ; nein, dann weiter
+073D:                 
+073D:                 * sende pruefsumme des parameterblocks - - - -
+073D:                 
+073D: 9E1B                    ldx     pruef           ; rette pruefsumme
+073F: D61C                    ldb     pruef+1         ; pruefsumme low-byte
+0741: 8D42                    bsr     outch           ; auf band
+0743: 9F1B                    stx     pruef           ; gerettete pruefsumme
+0745: 9F1B                    stx     pruef           ; warte 5
+0747: D61B                    ldb     pruef           ; pruefsumme high-byte
+0749: 8D3A                    bsr     outch           ; auf band
+074B: 12                      nop                     ; warte 2
+074C: 9610                    lda     flag            ; angegebene baudrate
+074E: 9753                    sta     baud            ; einstellen fuer datenblock
+0750:                 
+0750:                 * sende sync-zeichen des datenblocks - - - - - -
+0750:                 
+0750: 8E0040                  ldx     #$40            ; 64 sync-zeichen
+0753: C616            syncda  ldb     #$16            ; sync-zeichen
+0755: 17002D                  lbsr    outch           ; auf band
+0758: 12                      nop                     ; warte 2
+0759: 301F                    leax    -1,x            ; zeichenzaehler
+075B: 26F6                    bne     syncda          ; alle gesendet?
+075D:                 
+075D: C6C5                    ldb     #$c5            ; startbyte datenblock
+075F: 8D24                    bsr     outch           ; auf band
+0761: 9F1B                    stx     pruef           ; pruefsumme=0
+0763:                 
+0763:                 * sende datenblock - - - - - - - - - - - - - -
+0763:                 
+0763: 9E11                    ldx     start           ; startadresse datenblock
+0765: E680            datout  ldb     ,x+             ; datenbyte
+0767: 8D1C                    bsr     outch           ; auf band
+0769: 9C19                    cmpx    ende            ; ende + 1 erreicht?
+076B: 25F8                    blo     datout          ; nein, weiter
+076D:                 
+076D:                 * sende pruefsumme datenblock - - - - - - - -
+076D:                 
+076D: 9E1B                    ldx     pruef           ; rette pruefsumme
+076F: D61C                    ldb     pruef+1         ; pruefsumme low-byte
+0771: 8D12                    bsr     outch           ; auf band
+0773: 9F1B                    stx     pruef           ; gerettete pruefsumme
+0775: 9F1B                    stx     pruef           ; warte 5
+0777: D61B                    ldb     pruef           ; pruefsumme high-byte
+0779: 8D0A                    bsr     outch           ; auf band
+077B:                 
+077B: 7FFF20                  clr     pb              ; port löschen
+077E: 8601                    lda     #$01            ; steuerbyte
+0780: 9710                    sta     flag            ; auf save-modus
+0782:                 
+0782: 16FE55                  lbra    right           ; ok ausgeben und ende
+0785:                 
+0785:                 **********************************************
+0785:                 * ende  hp-save - - - - - - - - - - - - - - -*
+0785:                 **********************************************
+0785:                 
+0785:                 * up fuer save - - - - - - - - - - - - - - - -
+0785:                 
+0785:                 ; in: b         auszugebendes byte
+0785:                 ;     baud      baudrate ( $00 | $80 ... 3600 | 7200)
+0785:                 ; out: -
+0785:                 ; veraendert: a,b,u,y
+0785:                 
+0785: 108E0008        outch   ldy     #$08            ; bit-zaehler
+0789: 170099                  lbsr    euro            ; euro-wartezeit
+078C: 9653                    lda     baud            ; baudrate
+078E: 2B24                    bmi     l3              ; 7200?
+0790: CE0003                  ldu     #$03            ; 3600: warte 59 zyklen
+0793: CE0003                  ldu     #$03
+0796: 170077                  lbsr    wa0
+0799: 170089                  lbsr    euro            ; euro-wartezeit
+079C: 2016                    bra     l3              ; byte-einstieg
+079E: 9653            l1      lda     baud            ; bit-einstieg: baudrate
+07A0: 2B09                    bmi     l2              ; 7200?
+07A2: CE0003                  ldu     #$03            ; 3600: warte 62 zyklen
+07A5: 170065                  lbsr    wa6
+07A8: 17007A                  lbsr    euro            ; euro-wartezeit
+07AB: CE0001          l2      ldu     #$01            ; warte 30
+07AE: 17005F                  lbsr    wa0
+07B1: 170071                  lbsr    euro            ; euro-wartezeit
+07B4: 54              l3      lsrb                    ; bit aus datenbyte
+07B5: 252B                    bcs     eins            ; 1-bit?
+07B7: B6FF20                  lda     pb              ; 0-bit:
+07BA: 88FC                    eora    #outmask        ; flanke erzeugen
+07BC: B7FF20                  sta     pb
+07BF: 9653                    lda     baud            ; baudrate
+07C1: 2B09                    bmi     l4              ; 7200?
+07C3: CE0003                  ldu     #$03            ; 3600: warte 62 zyklen
+07C6: 170044                  lbsr    wa6
+07C9: 170059                  lbsr    euro            ; euro-wartezeit
+07CC: CE0002          l4      ldu     #$02            ; warte 43 zyklen
+07CF: 17003E                  lbsr    wa0
+07D2: 170050                  lbsr    euro            ; euro-wartezeit
+07D5: B6FF20                  lda     pb              ; flanke erzeugen
+07D8: 88FC                    eora    #outmask
+07DA: B7FF20                  sta     pb
+07DD: 313F                    leay    -1,y            ; bitzaehler
+07DF: 26BD                    bne     l1              ; alle bits ausgegeben?
+07E1: 39                      rts
+07E2:                 
+07E2: DE1B            eins    ldu     pruef           ; pruefsumme
+07E4: 3341                    leau    1,u             ; erhoehen
+07E6: DF1B                    stu     pruef
+07E8: 9653                    lda     baud            ; baudrate
+07EA: 2B09                    bmi     l5              ; 7200?
+07EC: CE0003                  ldu     #$03            ; 3600: warte 62 zyklen
+07EF: 17001B                  lbsr    wa6
+07F2: 170030                  lbsr    euro            ; euro-wartezeit
+07F5: CE0001          l5      ldu     #$01            ; warte 40 zyklen
+07F8: 170010                  lbsr    wa10
+07FB: 170027                  lbsr    euro            ; euro-wartezeit
+07FE: B6FF20                  lda     pb              ; flanke erzeugen
+0801: 88FC                    eora    #outmask
+0803: B7FF20                  sta     pb
+0806: 313F                    leay    -1,y            ; bitzaehler
+0808: 2694                    bne     l1              ; alle bits ausgegeben?
+080A: 39                      rts
+080B:                 
+080B:                 * warteschleifen - - - - - - - - - - - - - - -
+080B:                 
+080B:                 ; in: u                 wartezeit: 
+080B:                 ;                               wa0: u*13+14
+080B:                 ;                               wa6: u*13+20
+080B:                 ;                               wa8: u*13+22
+080B:                 ;                               wa10: u*13+24
+080B:                 ; out: u                = 0
+080B:                 ; veraendert: u
+080B:                 
+080B:                                                 ; lbsr = 9 zyklen
+080B: 12              wa10    nop                     ;      = 2 zyklen
+080C: 12              wa8     nop                     ;      = 2 zyklen
+080D: 12              wa6     nop                     ;      = 2 zyklen
+080E: 12                      nop                     ;      = 2 zyklen
+080F: 12                      nop                     ;      = 2 zyklen
+0810: 335F            wa0     leau    -1,u            ;      = 5 zyklen
+0812: 11830000                cmpu    #$00            ;      = 5 zyklen
+0816: 26F8                    bne     wa0             ;      = 3 zyklen
+0818: 39                      rts                     ;      = 5 zyklen
+0819:                 
+0819:                 * eurocom warteschleife  - - - - - - - - - - -
+0819:                 * euro=31 zyklen  euro1=46 zyklen
+0819:                 
+0819:                 ; in: -
+0819:                 ; out: u        = 0
+0819:                 ; veraendert: u
+0819:                 
+0819:                                                 ; lbsr = 9 zyklen
+0819: 11830000        euro1   cmpu    #$00            ;      = 5 zyklen
+081D: 11830000                cmpu    #$00            ;      = 5 zyklen
+0821: 11830000                cmpu    #$00            ;      = 5 zyklen
+0825: 119353          euro    cmpu    baud            ;      = 7 zyklen
+0828: 119353                  cmpu    baud            ;      = 7 zyklen
+082B: CE0000                  ldu     #$00            ;      = 3 zyklen
+082E: 39                      rts                     ;      = 5 zyklen
+082F:                 
+082F:                 
 0 Pass 2 errors.
 
 SYMBOL TABLE
-       AUS 02 54dc       BA0 02 5207       BA1 02 5220      BAUD 00 4f53
-      BYTE 00 4f50      CHEK 02 54b1       CRB 00 fcf3        D0 02 52ed
-        D1 02 52fc        D2 02 5304       DAT 02 5514      DAT1 02 553b
-     DATEN 02 54e2    DATLOP 02 5510    DATOUT 02 5646    DIRECT 02 52df
-    EINGAB 02 5122      EINS 02 56c3       EN1 02 51ff       END 02 51e0
-      ENDE 00 4f19      EURO 02 5706     EURO1 02 56fa     FHEAD 02 527a
-      FLAG 00 4f10    FLANKE 02 55d0        H1 02 52af        H2 02 52b9
-        H3 02 52c4        H4 02 52cc        H5 02 52dc    HEAAUS 02 52a3
-    HEAD11 02 529e    HEAD12 02 5293    HEADIN 02 5283       HEX 02 533d
-      HEX0 02 5335      HEX1 02 535c     HEXAS 02 52a7    HEXASC 02 52a4
-    HEXAUS 02 536f      HEXF 02 5370       HKS 00 f02d        IN 00 f321
-       IN1 02 5356        L1 02 567f        L2 02 568c        L3 02 5695
-        L4 02 56ad        L5 02 56d6     LAENG 00 4f13       LD0 02 5150
-       LD1 02 5179    LDENDE 00 4f39    LDFLAG 00 4f30    LDLAEN 00 4f33
-    LDNAME 00 4f20    LDPUNK 00 4f2c    LDRES1 00 4f35    LDRES2 00 4f37
-    LDSTAR 00 4f31     LDTYP 00 4f2d      LOAD 02 53ac        N0 02 5457
-        N1 02 546b      NAME 00 4f00        NR 00 4f1d        OK 02 522e
-       OK1 02 5228        ON 02 538f       OUT 02 5379      OUT1 02 538e
-      OUT2 02 5383    OUTASC 00 f33d     OUTCH 02 5666        P1 02 5253
-        P2 02 5268     PANTF 02 53e7       PAR 02 53fe    PAREST 02 53f8
-    PAROUT 02 5604        PB 00 fcf2    PIAAC0 00 fcf1     POUTR 02 560d
-     PRAUS 02 5277    PRNATY 02 5246     PRUEF 00 4f1b     PUNKT 00 4f0c
-        RD 02 55b5     RDBIT 02 55a2    RDBYTE 02 5593    RDEINS 02 55c5
-       RE1 02 5428       RE2 02 543e      READ 02 5599      RES1 00 4f15
-      RES2 00 4f17     RIGHT 02 54bc      SALT 02 544a      SAVE 02 55e0
-       ST0 02 51ae       ST1 02 51d1       ST2 02 51d4     START 00 4f11
-    START1 02 5117      STOP 02 54cd       SV0 02 5144      SYCD 02 54f9
-    SYCDAR 02 54e4      SYCP 02 53d1    SYCPAR 02 53b9      SYCV 02 5555
-    SYCVER 02 5540    SYNCDA 02 5634    SYNCPA 02 55f1        T0 02 547a
-        T1 02 5496        T2 02 548e     TBAUD 02 5041     TENDE 02 5039
-     TFEHL 02 5060      TFPD 02 50ba      TFPP 02 509a       TGO 02 5114
-     TMODE 02 5003      TNAM 02 5021       TNR 02 50d8       TOK 02 508e
-      TOK1 02 5083      TOK2 02 5097    TSTART 02 5031     TSTOP 02 50f9
-      TTYP 02 5029       TY0 02 5186       TYP 00 4f0d      TYP1 02 5473
-        VE 02 54ae       VE0 02 514b      VER1 02 5590    VERIFY 02 553e
-    VERLOP 02 556a       WA0 02 56f1      WA10 02 56ec       WA6 02 56ee
-       WA8 02 56ed      ZAHL 00 4f51
+       AUS 02 05fb       BA0 02 0326       BA1 02 033f      BAUD 00 4f53
+      BYTE 00 4f50      CHEK 02 05cf       CRB 00 ff21        D0 02 040c
+        D1 02 041b        D2 02 0423       DAT 02 0633      DAT1 02 065a
+     DATEN 02 0601    DATLOP 02 062f    DATOUT 02 0765    DIRECT 02 03fe
+    EINGAB 02 0241      EINS 02 07e2       EN1 02 031e       END 02 02ff
+      ENDE 00 4f19      EURO 02 0825     EURO1 02 0819     FHEAD 02 0399
+      FLAG 00 4f10    FLANKE 02 06ef        H1 02 03ce        H2 02 03d8
+        H3 02 03e3        H4 02 03eb        H5 02 03fb    HEAAUS 02 03c2
+    HEAD11 02 03bd    HEAD12 02 03b2    HEADIN 02 03a2       HEX 02 045c
+      HEX0 02 0454      HEX1 02 047b     HEXAS 02 03c6    HEXASC 02 03c3
+    HEXAUS 02 048e      HEXF 02 048f       HKS 02 0121        IN 02 0107
+       IN1 02 0475    INMASK 00 0001    INWAIT 02 0109       IW1 02 0113
+        L1 02 079e        L2 02 07ab        L3 02 07b4        L4 02 07cc
+        L5 02 07f5     LAENG 00 4f13       LD0 02 026f       LD1 02 0298
+    LDENDE 00 4f39    LDFLAG 00 4f30    LDLAEN 00 4f33    LDNAME 00 4f20
+    LDPUNK 00 4f2c    LDRES1 00 4f35    LDRES2 00 4f37    LDSTAR 00 4f31
+     LDTYP 00 4f2d      LOAD 02 04cb        N0 02 0575        N1 02 0589
+      NAME 00 4f00        NR 00 4f1d        OK 02 034d       OK1 02 0347
+        ON 02 04ae       OUT 02 0498      OUT1 02 04ad      OUT2 02 04a2
+    OUTASC 02 0119     OUTCH 02 0785   OUTMASK 00 00fc        P1 02 0372
+        P2 02 0387     PANTF 02 0505       PAR 02 051c    PAREST 02 0516
+    PAROUT 02 0723        PB 00 ff20     POUTR 02 072c     PRAUS 02 0396
+    PRNATY 02 0365     PRUEF 00 4f1b     PUNKT 00 4f0c        RD 02 06d4
+     RDBIT 02 06c1    RDBYTE 02 06b2    RDEINS 02 06e4       RE1 02 0546
+       RE2 02 055c      READ 02 06b8      RES1 00 4f15      RES2 00 4f17
+     RIGHT 02 05da      SALT 02 0568      SAVE 02 06ff       ST0 02 02cd
+       ST1 02 02f0       ST2 02 02f3     START 00 4f11    START1 02 0236
+      STOP 02 05eb       SV0 02 0263      SYCD 02 0618    SYCDAR 02 0603
+      SYCP 02 04ef    SYCPAR 02 04d8      SYCV 02 0674    SYCVER 02 065f
+    SYNCDA 02 0753    SYNCPA 02 0710 SYSDRAGON 01 0001   SYSEURO 01 0000
+    SYSSIM 01 0002   SYSTYPE 01 0002        T0 02 0598        T1 02 05b4
+        T2 02 05ac     TBAUD 02 0160     TENDE 02 0158  TESTSAVE 01 0000
+     TFEHL 02 017f      TFPD 02 01d9      TFPP 02 01b9       TGO 02 0233
+     TMODE 02 0122      TNAM 02 0140       TNR 02 01f7       TOK 02 01ad
+      TOK1 02 01a2      TOK2 02 01b6    TSTART 02 0150     TSTOP 02 0218
+      TTYP 02 0148       TY0 02 02a5       TYP 00 4f0d      TYP1 02 0591
+        VE 02 05cc       VE0 02 026a      VER1 02 06af    VERIFY 02 065d
+    VERLOP 02 0689       WA0 02 0810      WA10 02 080b       WA6 02 080d
+       WA8 02 080c      ZAHL 00 4f51

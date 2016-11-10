@@ -20,6 +20,14 @@ original/		variations of the original implementation
   st09.lst		list-output file from the assembler
   info.txt		this file
 
+  dump.v09		simulator post-run memory dump
+  io-in			simulator PIA input file
+  io.ref		simulator PIA output file for reference
+  st09.trace		simulator (v09t) execution trace (STDOUT and
+			STDERR mixed)
+
+  v09			simulator binary (Linux 32 bit)
+  v09t			simulator binary tracing variant (Linux 32 bit)
 
   printed/		version: from original publication (in german)
 			c't Magazin 1984-08 p. 94: SuperTape 6809
@@ -47,6 +55,25 @@ The assembler program refered in the make-files is called "a09" from the
 sbc09 project, see https://github.com/6809/sbc09/tree/master/src
 
 
+
+Simulator
+---------
+
+The simulator is able to run 6809 binaries, with an option of
+output an execution trace. It is called "v09" and may be compiled
+on standard Unix and Linux platforms.
+See v09s.c of the sbc09 project at https://github.com/6809/sbc09/tree/master/src
+
+For SuperTape a special variant is needed, which implements i/o ports,
+in this case a PIA chip behavior is sufficient. The chip register simulation
+records and replays port writes and reads to and from a file, respectively.
+
+A simulator-run with PIA access writes to file "io" and reads from file "io-in".
+
+The source code of the simulator version adds conditional assembly and a
+special testmode which includes save routine without any interactivity.
+This is the ground on which testing and further analyses is based on.
+See section "Test environment" below.
 
 
 
@@ -81,5 +108,110 @@ Bugs of the original version
 
    Fix: The end address calculation came to late and will be done
  	earlier (right after reading the parameter block).
+
+
+
+
+Test environment (Simulator)
+----------------------------
+
+
+### Save Test
+
+
+# sourcecode change:
+
+systype set syssim
+testsave set 1
+
+# run test
+
+make sttest
+
+# or (file io will be opened in append mode!)
+
+rm -f io
+./v09 st09 >& st09.trace
+
+
+# current output may not differ to reference ...
+
+diff io io.ref
+
+
+### load test
+
+./v09 -d st09
+
+save=s : load=l : verify=v : L
+name : *
+typ  : *
+start: 3000
+ok? (cr)
+go
+ok
+nr name         typ start   ende
+01 t            bin 3000    3020
+save:load:verify? (yes=y)
+Cycles: 29156850
+
+# test with tracing output for further analysis
+
+# into file ...
+( echo "L." ; echo "" ; ) | ./v09t st09 >& o
+
+# or to pager ...
+( echo "L." ; echo "" ; ) | ./v09t st09 | & less
+
+
+
+### verify test
+
+./v09 -d st09
+
+## OK
+
+# take the start address from st09.lst, see label "dsave",
+# below we use "$010b"
+
+save=s : load=l : verify=v : v
+name : *
+typ  : *
+start: 10b
+ok? (cr)
+go
+ok
+save:load:verify? (yes=y)
+Cycles: 34507806
+
+
+## error condition
+
+./v09 -d st09
+
+save=s : load=l : verify=v : v
+name : *
+typ  : *
+start:
+ok? (cr)
+go
+fehler im datenblock!
+save:load:verify? (yes=y)
+Cycles: 20231599
+
+
+## file not found condition
+
+./v09 -d st09
+
+save=s : load=l : verify=v : v
+name : x
+typ  : *
+start:
+ok? (cr)
+go
+nr name         typ start   ende
+01 t            bin 0133    0153
+
 
 
