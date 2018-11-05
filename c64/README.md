@@ -13,29 +13,30 @@
 | y-*.txt     | HypraAss symbol table output after assembly converted to ASCII (for printing)     |
 
 
+### Versions
 
-Save #25: Comments added, fixed filename handling (loading with empty filename).
+**Save #25**: Comments added, fixed filename handling (loading with empty filename).
 
-Save #24: Bugfix in read byte with checksum routine! Comments added. 
+**Save #24**: Bugfix in read byte with checksum routine! Comments added. 
 Bad checksum in header message and FOUND message with longer pause time to recognize these during screen blanking.
 
-Save #23: Checksum routine changed to table-based version. Byte read routine with integrated checksum calculation.
+**Save #23**: Checksum routine changed to table-based version. Byte read routine with integrated checksum calculation.
 Erroneous: source line 3512 wrong destination
 
-Save #22: Further comments and labels made self-explaining. Filename handling (syntax check) fixed/improved.
+**Save #22**: Further comments and labels made self-explaining. Filename handling (syntax check) fixed/improved.
 
-Save #21: Save name handling reworked (labels, optimized, less zero-page usage).
+**Save #21**: Save name handling reworked (labels, optimized, less zero-page usage).
 
-Save #20: Improvements: byte write routine merged into one, filename handling (extension) fixed, verify flag into bit 7 (easier to handle), checksum calculation optimized.
+**Save #20**: Improvements: byte write routine merged into one, filename handling (extension) fixed, verify flag into bit 7 (easier to handle), checksum calculation optimized.
 
-Save #19: Fixed interrupt handling on exit on writing (bugfix).
+**Save #19**: Fixed interrupt handling on exit on writing (bugfix).
 
-Save #18: Bug in byte write routine and name parsing fixed (bugfix).
+**Save #18**: Bug in byte write routine and name parsing fixed (bugfix).
 
-Save #17: Setup, exit, filename processing, several optimizations for speed and common style.
+**Save #17**: Setup, exit, filename processing, several optimizations for speed and common style.
 Improved "JK" version: optimized code, source code structure, error message text not taken from KERNAL in case some alternative ROM is in place (like SpeedDOS+ which doesn't have the tape messages).
 
-Save #13: The first archived version, equal to the original listing from c't magazine 1984/10.
+**Save #13**: The first archived version, equal to the original listing from c't magazine 1984/10.
 Just converted to HypraAss syntax with consistent label naming scheme and reworked comments (german).
 
 
@@ -61,23 +62,32 @@ The saved image contains the assembler HypraAss as a autostart programm (started
 
 ### Starting and setup
 
+Original version:
 
+```
 load "c-st 13",8,1
 new
 sys 53000
+```
 
 
-ST2 versions are compatible with alternative kernals which do not contain any tape routines. 
+Improved version:
 
-# with speeddos+ kernal
+These ST2 versions are compatible with alternative kernals which do not contain any tape routines, hence missing the error message texts. 
+
+with SpeedDOS+ kernal:
+```
 load "c-st2-25"
 new
 sys $cfca
+```
 
-# with standard kernal
+with standard kernal:
+```
 load "c-st2-25",8,1
 new
 sys 53194
+```
 
 
 
@@ -93,13 +103,23 @@ sys 53194
 
 ### BASIC interface
 
-LOAD"FILE",7
 
-# 3600
-SAVE"FILE",7
+Load the file matching the filename exact ...
+`LOAD"FILE",7`
 
-# 7200
-SAVE"FILE",7,1
+Load the next file starting with "S-" and with extension .BAS ...
+`LOAD"S-*.BAS",7`
+
+Load the next file ...
+`LOAD"*",7`
+or
+`LOAD"",7`
+
+Save with 3600 baud ...
+`SAVE"FILE",7`
+
+Save with 7200 baud ...
+`SAVE"FILE",7,1`
 
 
 ## Bugs
@@ -122,6 +142,7 @@ CIA 1, /FLAG pin is the reading line, connected to the datasette port.
 Only the falling edge can be detected!
 
 
+```
   ;*****************************
   ;* timer setzen (baudrate)
   ;*****************************
@@ -148,6 +169,7 @@ Only the falling edge can be detected!
   cc91 a990   :5550 -          lda #$90
   cc93 8d0ddc :5552 -          sta icr        ;timer interrupt
   cc96 60     :5554 -          rts
+```
 
 
 ### Bit counting
@@ -155,6 +177,7 @@ Only the falling edge can be detected!
 
 #### table driven
 
+```
   ;*****************************
   ;* byte lesen mit pruefsumme
   ;*****************************
@@ -185,10 +208,12 @@ Only the falling edge can be detected!
   ; tabelle wert->bitanzahl
                3580 -bctab     .by 0,1,1,2,1,2,2,3; nibblewerte 0-7
                3585 -          .by 1,2,2,3,2,3,3,4; nibblewerte 8-15
+```
 
 
 #### iterative, optimized (compared to the original)
 
+```
   cd99 a65d   :6626 -          ldx chksml
   cd9b 4a     :6628 -stpploop  lsr            ;pruefsum
   cd9c 9007   :6630 -          bcc stppnull   ;berechnen
@@ -198,5 +223,6 @@ Only the falling edge can be detected!
   cda3 f0f6   :6637 -          beq stpploop   ;ueberlauf - weiter!
   cda5 d0f4   :6638 -stppnull  bne stpploop   ;alle 1en gezaehlt?
   cda7 865d   :6639 -          stx chksml
+```
 
 
