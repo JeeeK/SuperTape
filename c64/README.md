@@ -1,8 +1,10 @@
 # C64 SuperTape
 
-This is the implementation of the SuperTape format for Commodore C64 as published as listing in c't magazine 1984/10. It has been published several months ago but in a variation which needed a hardware modification on the tape interface. In this version this limitation has been overcome by more sophisticated read-logic just by taking the timing of falling edges into account.
+This is the implementation of the SuperTape format for Commodore C64 as published as listing in c't Magazin 1984/10 (Heise Verlag). It has been already published several months before in a variation which needed a hardware modification on the tape interface. In this newer version this limitation has been overcome by more sophisticated read-logic just by taking the timing of falling edges into account (the tape input is only capable of recognizing falling edges).
 
-Beside the original implemention it has been widely reworked with improvements in source code style, code arrangement and factoring, making it more compact and and uses faster code parts. Especially the filename handling in conjunction with pattern matching is now solid (toward the better implementations on other platforms).
+A more advanced version named SuperTape D2 has been published in the tape/disk magazine INPUT64 04/1985. It does not only supporting LOAD, VERIFY and SAVE but also the OPEN/PRINT#/INPUT#/GET#/CLOSE interface from BASIC. Currently this project doesn't cover this whole functional extent.
+
+Beside the original implemention which can be found here, the branch here has been widely reworked with improvements in source code style, code arrangement and factoring, making it more compact and and uses faster code parts. Especially the filename handling in conjunction with pattern matching is now solid (toward the better implementations on other platforms).
 
 
 ## Version history
@@ -110,26 +112,39 @@ sys 53194
 
 
 Load the file matching the filename exact ...
+
 `LOAD"FILE",7`
 
 Load the next file starting with "S-" and with extension .BAS ...
+
 `LOAD"S-*.BAS",7`
 
 Load the next file ...
+
 `LOAD"*",7`
+
 or
+
 `LOAD"",7`
 
 Save with 3600 baud ...
+
 `SAVE"FILE",7`
 
 Save with 7200 baud ...
+
 `SAVE"FILE",7,1`
+
+Verify the current programm in memory ...
+
+`VERIFY"FILE",7,1`
 
 
 ## Bugs
 
-ST2 version bugs:
+### ST2 version bugs:
+
+Not found in the original version ...
 
 * Filename pattern matching: fixed since Save #20
 
@@ -161,8 +176,8 @@ Only the falling edge can be detected!
   cc80 a081   :5526 -          ldy #lospdh    ;baud
   cc82 a973   :5528 -          lda #locmp
   cc84 8e04dc :5540 -set2      stx cntal      ;timer
-  cc87 8c05dc :5542 -          sty cntah      ;wert
-  cc8a 8557   :5544 -          sta tlim       ;zeitlimit f.t3
+  cc87 8c05dc :5542 -          sty cntah      ;value
+  cc8a 8557   :5544 -          sta tlim       ;timelimit for t3
 
 ; start of initializing the setup of the /FLAG pin for reading
 ; bit 7 = 0: corresponds to clear bits 0-4, bit 7=1: corresponds to set bits 0-4
@@ -190,27 +205,27 @@ Only the falling edge can be detected!
   ; y-reg bit7 muss immer 0 sein!
   ;
   cb84 245b   :3510 -rdbytecs  bit wtflag
-  cb86 10fc   :3512 -          bpl rdbytecs   ;warten
-  cb88 845b   :3514 -          sty wtflag     ;flag loeschen
+  cb86 10fc   :3512 -          bpl rdbytecs   ;wait
+  cb88 845b   :3514 -          sty wtflag     ;clear flag
   cb8a a55a   :3516 -          lda buff
-  cb8c 4a     :3520 -calccs    lsr            ;pruefsumme
+  cb8c 4a     :3520 -calccs    lsr            ;checksum
   cb8d 4a     :3521 -          lsr            ;high nibble
   cb8e 4a     :3522 -          lsr
-  cb8f 4a     :3523 -          lsr            ;bit3 in c
+  cb8f 4a     :3523 -          lsr            ;bit3 into carry
   cb90 8594   :3525 -          sta tmpx
   cb92 a55a   :3530 -          lda buff
-  cb94 2907   :3531 -          and #07        ;nur noch bit0-2
+  cb94 2907   :3531 -          and #07        ;just bit0-2
   cb96 aa     :3535 -          tax
   cb97 bdaacb :3540 -          lda bctab,x    ;bitcount bit0-2
   cb9a a694   :3541 -          ldx tmpx       ;bitcount bit4-7
-  cb9c 7daacb :3542 -          adc bctab,x    ;in c ist bit3
-  cb9f 655d   :3545 -          adc chksml     ;+pruefsumme
+  cb9c 7daacb :3542 -          adc bctab,x    ;carry holds bit3
+  cb9f 655d   :3545 -          adc chksml     ;add to checksum
   cba1 855d   :3550 -          sta chksml
   cba3 9002   :3560 -          bcc ccsexit
   cba5 e65e   :3565 -          inc chksmh
   cba7 a55a   :3570 -ccsexit   lda buff
   cba9 60     :3575 -          rts
-  ; tabelle wert->bitanzahl
+  ; table values -> bit-count
                3580 -bctab     .by 0,1,1,2,1,2,2,3; nibblewerte 0-7
                3585 -          .by 1,2,2,3,2,3,3,4; nibblewerte 8-15
 ```
@@ -220,13 +235,13 @@ Only the falling edge can be detected!
 
 ```
   cd99 a65d   :6626 -          ldx chksml
-  cd9b 4a     :6628 -stpploop  lsr            ;pruefsum
-  cd9c 9007   :6630 -          bcc stppnull   ;berechnen
+  cd9b 4a     :6628 -stpploop  lsr            ;checksum
+  cd9c 9007   :6630 -          bcc stppnull   ;calculation
   cd9e e8     :6632 -          inx
   cd9f d0fa   :6634 -          bne stpploop
   cda1 e65e   :6636 -          inc chksmh
-  cda3 f0f6   :6637 -          beq stpploop   ;ueberlauf - weiter!
-  cda5 d0f4   :6638 -stppnull  bne stpploop   ;alle 1en gezaehlt?
+  cda3 f0f6   :6637 -          beq stpploop   ;on overrun, continue!
+  cda5 d0f4   :6638 -stppnull  bne stpploop   ;all one bits counted?
   cda7 865d   :6639 -          stx chksml
 ```
 
