@@ -1,5 +1,10 @@
 # C64 SuperTape
 
+This is the implementation of the SuperTape format for Commodore C64 as published as listing in c't magazine 1984/10. It has been published several months ago but in a variation which needed a hardware modification on the tape interface. In this version this limitation has been overcome by more sophisticated read-logic just by taking the timing of falling edges into account.
+
+Beside the original implemention it has been widely reworked with improvements in source code style, code arrangement and factoring, making it more compact and and uses faster code parts. Especially the filename handling in conjunction with pattern matching is now solid (toward the better implementations on other platforms).
+
+
 ## Version history
 
 ### File types
